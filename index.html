@@ -1,0 +1,1083 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Magma Drift - Free HTML5 Game</title>
+<meta name="description" content="Play Magma Drift - Tap to jump between platforms and avoid molten falling debris while collecting unpredictable powerups.">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#1a0a0a">
+<link rel="canonical" href="https://balinti.github.io/magma-drift/">
+
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="Magma Drift - Free HTML5 Game">
+<meta property="og:description" content="Tap to jump between platforms and avoid molten falling debris while collecting unpredictable powerups.">
+<meta property="og:url" content="https://balinti.github.io/magma-drift/">
+<meta property="og:image" content="https://balinti.github.io/magma-drift/og-image.png">
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Magma Drift - Free HTML5 Game">
+<meta name="twitter:description" content="Tap to jump between platforms and avoid molten falling debris while collecting unpredictable powerups.">
+<meta name="twitter:image" content="https://balinti.github.io/magma-drift/og-image.png">
+
+<!-- AdSense -->
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4099346100621490" crossorigin="anonymous"></script>
+
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{
+  width:100%;height:100%;overflow:hidden;
+  background:#1a0a0a;
+  font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
+  color:#e0d0c0;
+  touch-action:none;
+  -webkit-tap-highlight-color:transparent;
+  user-select:none;-webkit-user-select:none;
+}
+#wrap{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  width:100%;height:100%;
+  max-width:420px;max-height:750px;
+  margin:0 auto;position:relative;
+}
+canvas{
+  display:block;width:100%;height:100%;
+  border-radius:8px;
+  image-rendering:crisp-edges;
+}
+#seo{
+  position:absolute;bottom:0;left:0;right:0;
+  max-height:80px;overflow:auto;
+  padding:8px 12px;
+  font-size:11px;line-height:1.4;color:#6a5a4a;
+  text-align:center;
+  background:rgba(10,5,5,0.85);
+  border-top:1px solid #2a1a1a;
+  pointer-events:auto;
+  z-index:2;
+}
+#seo h2{font-size:12px;margin-bottom:3px;color:#8a7060}
+#seo a{color:#b06030;text-decoration:none}
+#btns{
+  display:none;position:absolute;bottom:90px;
+  z-index:10;gap:10px;
+}
+#btns button{
+  padding:8px 18px;border:none;border-radius:20px;
+  font-size:13px;font-weight:600;cursor:pointer;
+  background:rgba(200,100,40,0.85);color:#fff;
+  backdrop-filter:blur(4px);
+  transition:transform .1s;
+}
+#btns button:active{transform:scale(0.94)}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="c"></canvas>
+  <div id="btns">
+    <button id="shareBtn">Share</button>
+    <button id="copyBtn">Copy</button>
+  </div>
+  <div id="seo">
+    <h2>About Magma Drift</h2>
+    <p>Magma Drift is a free hyper-casual HTML5 game. Tap to hop between basalt pads on a volcanic ring. Avoid molten rocks, time near-misses for bonus points, and collect shields and coolant powerups. How long can you survive the rising heat?</p>
+    <p><strong>How to play:</strong> Tap or press Space to hop to the next lane. Don't stay too long or the pad melts! Watch for telegraph rings warning of incoming strikes.</p>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ======================================================================
+   MAGMA DRIFT — Melt Lanes
+   Hyper-casual HTML5 Canvas Game
+   ====================================================================== */
+
+(() => {
+
+// --- Canvas & DPR Setup ---
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const wrap = document.getElementById('wrap');
+const btnsDiv = document.getElementById('btns');
+const shareBtn = document.getElementById('shareBtn');
+const copyBtn = document.getElementById('copyBtn');
+
+let W, H, DPR, cx, cy, ringR;
+
+function resize() {
+  const rect = wrap.getBoundingClientRect();
+  W = rect.width;
+  H = rect.height;
+  DPR = window.devicePixelRatio || 1;
+  canvas.width = W * DPR;
+  canvas.height = H * DPR;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  cx = W * 0.5;
+  cy = H * 0.48;
+  ringR = Math.min(W, H) * 0.22;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// --- Constants ---
+const NUM_LANES = 4;
+const PAD_RADIUS = 28;
+const PLAYER_RADIUS = 12;
+const LS_KEY = 'magmaDriftBest';
+
+// --- State ---
+let state = 'start'; // start | playing | gameover
+let runTime = 0;
+let score = 0;
+let bestScore = parseInt(localStorage.getItem(LS_KEY)) || 0;
+let playerLane = 0;
+let playerShield = false;
+let coolantTimer = 0;
+let streak = 0;
+let mult = 1;
+let heatWaveTimer = 0;
+let heatWaveActive = false;
+let heatWaveCycle = 0;
+
+// Hop animation
+let hopping = false;
+let hopFrom = 0;
+let hopTo = 0;
+let hopT = 0;
+const HOP_DUR = 0.12;
+
+// Pad melt state
+let padMelt = [0, 0, 0, 0]; // 0..1
+let padAlive = [true, true, true, true];
+
+// Hazards
+let hazards = []; // {lane, t, duration, struck}
+let spawnAccum = 0;
+
+// Powerups
+let powerups = []; // {lane, type:'shield'|'coolant', t}
+let powerupSpawnAccum = 0;
+
+// Particles
+let particles = [];
+let lavaBubbles = [];
+let textPops = [];
+
+// Screen shake
+let shakeX = 0, shakeY = 0, shakeDecay = 0;
+
+// Challenge score from URL
+let challengeScore = 0;
+
+// --- Utility ---
+function lerp(a, b, t) { return a + (b - a) * t; }
+function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+function rand(a, b) { return a + Math.random() * (b - a); }
+function randInt(a, b) { return Math.floor(rand(a, b + 1)); }
+function hsl(h, s, l, a) { return a !== undefined ? `hsla(${h},${s}%,${l}%,${a})` : `hsl(${h},${s}%,${l}%)`; }
+
+function lanePos(i) {
+  const angle = -Math.PI / 2 + i * (Math.PI / 2);
+  return { x: cx + Math.cos(angle) * ringR, y: cy + Math.sin(angle) * ringR };
+}
+
+// --- Difficulty functions ---
+function meltTime(t) { return Math.max(0.85, 2.20 - 0.018 * t); }
+function telegraphTime(t) {
+  let base = Math.max(0.45, 0.75 - 0.005 * t);
+  if (coolantTimer > 0) base *= 1.35;
+  if (heatWaveActive) base *= 0.85;
+  return base;
+}
+function spawnInterval(t) { return Math.max(0.55, 1.20 - 0.0105 * t); }
+const NEAR_WINDOW = 0.12;
+function nearWindow() { return heatWaveActive ? 0.14 : 0.12; }
+
+// --- Init / Reset ---
+function initGame() {
+  runTime = 0;
+  score = 0;
+  playerLane = 0;
+  playerShield = false;
+  coolantTimer = 0;
+  streak = 0;
+  mult = 1;
+  heatWaveTimer = 0;
+  heatWaveActive = false;
+  heatWaveCycle = 0;
+  hopping = false;
+  padMelt = [0, 0, 0, 0];
+  padAlive = [true, true, true, true];
+  hazards = [];
+  spawnAccum = 0;
+  powerups = [];
+  powerupSpawnAccum = 0;
+  particles = [];
+  textPops = [];
+  shakeX = 0; shakeY = 0; shakeDecay = 0;
+  btnsDiv.style.display = 'none';
+}
+
+// --- Lava Bubbles (background) ---
+function initLavaBubbles() {
+  lavaBubbles = [];
+  for (let i = 0; i < 20; i++) {
+    lavaBubbles.push({
+      x: rand(0, W), y: rand(0, H),
+      r: rand(2, 6), speed: rand(8, 25),
+      hue: rand(10, 40), alpha: rand(0.15, 0.4),
+      phase: rand(0, Math.PI * 2)
+    });
+  }
+}
+initLavaBubbles();
+
+function updateLavaBubbles(dt) {
+  for (const b of lavaBubbles) {
+    b.y -= b.speed * dt;
+    b.x += Math.sin(b.phase + runTime * 1.5) * 12 * dt;
+    b.alpha = 0.15 + 0.15 * Math.sin(b.phase + runTime * 2);
+    if (b.y < -10) {
+      b.y = H + 10;
+      b.x = rand(0, W);
+    }
+  }
+}
+
+function drawLavaBubbles() {
+  for (const b of lavaBubbles) {
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+    ctx.fillStyle = hsl(b.hue, 90, 55, b.alpha);
+    ctx.fill();
+  }
+}
+
+// --- Particles ---
+function spawnParticles(x, y, count, hueBase, spread, speed, life) {
+  for (let i = 0; i < count; i++) {
+    const angle = rand(0, Math.PI * 2);
+    const spd = rand(speed * 0.3, speed);
+    particles.push({
+      x, y,
+      vx: Math.cos(angle) * spd * rand(0.5, 1),
+      vy: Math.sin(angle) * spd * rand(0.5, 1) - rand(10, 40),
+      r: rand(1.5, 4),
+      hue: hueBase + rand(-15, 15),
+      life: rand(life * 0.5, life),
+      maxLife: life,
+      gravity: rand(40, 100)
+    });
+  }
+}
+
+function updateParticles(dt) {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.vy += p.gravity * dt;
+    p.life -= dt;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+}
+
+function drawParticles() {
+  for (const p of particles) {
+    const a = Math.max(0, p.life / p.maxLife);
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r * a, 0, Math.PI * 2);
+    ctx.fillStyle = hsl(p.hue, 90, 60, a * 0.9);
+    ctx.fill();
+  }
+}
+
+// --- Text Pops ---
+function addTextPop(x, y, text, color, size) {
+  textPops.push({ x, y, text, color, size: size || 16, t: 0, dur: 0.7 });
+}
+
+function updateTextPops(dt) {
+  for (let i = textPops.length - 1; i >= 0; i--) {
+    const tp = textPops[i];
+    tp.t += dt;
+    if (tp.t >= tp.dur) textPops.splice(i, 1);
+  }
+}
+
+function drawTextPops() {
+  for (const tp of textPops) {
+    const p = tp.t / tp.dur;
+    const a = 1 - p;
+    const scale = 1 + 0.3 * Math.sin(p * Math.PI);
+    ctx.save();
+    ctx.translate(tp.x, tp.y - p * 30);
+    ctx.scale(scale, scale);
+    ctx.globalAlpha = a;
+    ctx.font = `bold ${tp.size}px 'Segoe UI',system-ui,sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = tp.color;
+    ctx.fillText(tp.text, 0, 0);
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+}
+
+// --- Hazard Spawning ---
+function spawnHazard() {
+  const tTime = telegraphTime(runTime);
+  // Pick a lane, fairness: avoid player's current lane if telegraph is too short
+  let candidates = [];
+  const activeLanes = [];
+  for (let i = 0; i < NUM_LANES; i++) {
+    if (padAlive[i]) activeLanes.push(i);
+  }
+
+  // Check which lanes are already under threat
+  const threatenedLanes = new Set(hazards.filter(h => !h.struck).map(h => h.lane));
+
+  // Determine if we can do a double strike
+  const safeLanesNeeded = 2;
+  const availableForStrike = activeLanes.filter(l => !threatenedLanes.has(l));
+
+  if (availableForStrike.length <= safeLanesNeeded) return; // Don't spawn if it would be unfair
+
+  for (const l of availableForStrike) {
+    // Fairness: don't target player lane with very short telegraph
+    if (l === playerLane && tTime < 0.5) continue;
+    candidates.push(l);
+  }
+  if (candidates.length === 0) return;
+
+  const lane = candidates[randInt(0, candidates.length - 1)];
+  hazards.push({ lane, t: 0, duration: tTime, struck: false });
+}
+
+// --- Powerup Spawning ---
+function spawnPowerup() {
+  // Spawn on a random alive lane that doesn't have a powerup already
+  const used = new Set(powerups.map(p => p.lane));
+  const available = [];
+  for (let i = 0; i < NUM_LANES; i++) {
+    if (padAlive[i] && !used.has(i)) available.push(i);
+  }
+  if (available.length === 0) return;
+  const lane = available[randInt(0, available.length - 1)];
+  const type = Math.random() < 0.5 ? 'shield' : 'coolant';
+  powerups.push({ lane, type, t: 0 });
+}
+
+// --- Player Hop ---
+function hop() {
+  if (hopping) return;
+
+  // Find next alive lane
+  let next = (playerLane + 1) % NUM_LANES;
+  let attempts = 0;
+  while (!padAlive[next] && attempts < NUM_LANES) {
+    next = (next + 1) % NUM_LANES;
+    attempts++;
+  }
+  if (attempts >= NUM_LANES) {
+    die('No pads left!');
+    return;
+  }
+
+  hopFrom = playerLane;
+  hopTo = next;
+  hopping = true;
+  hopT = 0;
+
+  // Check near-miss on hazards we're leaving
+  let nearMiss = false;
+  let nearBonus = 0;
+  for (const h of hazards) {
+    if (h.lane === playerLane && !h.struck) {
+      const rem = h.duration - h.t;
+      const nw = nearWindow();
+      if (rem > 0 && rem <= nw) {
+        nearMiss = true;
+        nearBonus = Math.max(nearBonus, Math.floor(40 * (1 - rem / nw)));
+      }
+    }
+  }
+
+  if (nearMiss) {
+    streak++;
+    const pos = lanePos(playerLane);
+    addTextPop(pos.x, pos.y - 30, 'NEAR!', '#ffee44', 18);
+    spawnParticles(pos.x, pos.y, 8, 50, 20, 80, 0.4);
+    triggerShake(2);
+  } else {
+    streak = 0;
+  }
+
+  mult = Math.min(6, 1 + Math.floor(streak / 3));
+  const hopPoints = (12 + nearBonus) * mult;
+  score += hopPoints;
+
+  if (hopPoints > 12) {
+    const pos = lanePos(hopTo);
+    addTextPop(pos.x + 25, pos.y - 15, '+' + hopPoints, '#ffcc33', 14);
+  }
+
+  // Pick up powerup at destination
+  for (let i = powerups.length - 1; i >= 0; i--) {
+    if (powerups[i].lane === hopTo) {
+      const pu = powerups[i];
+      if (pu.type === 'shield') {
+        playerShield = true;
+        addTextPop(lanePos(hopTo).x, lanePos(hopTo).y - 40, 'SHIELD!', '#44ddff', 16);
+      } else {
+        coolantTimer = 2;
+        addTextPop(lanePos(hopTo).x, lanePos(hopTo).y - 40, 'COOLANT!', '#44ffaa', 16);
+      }
+      powerups.splice(i, 1);
+    }
+  }
+
+  // Landing dust
+  const dest = lanePos(hopTo);
+  spawnParticles(dest.x, dest.y + 10, 5, 30, 15, 40, 0.3);
+}
+
+// --- Screen Shake ---
+function triggerShake(intensity) {
+  shakeDecay = intensity;
+}
+
+function updateShake(dt) {
+  if (shakeDecay > 0) {
+    shakeX = (Math.random() - 0.5) * shakeDecay * 4;
+    shakeY = (Math.random() - 0.5) * shakeDecay * 4;
+    shakeDecay -= dt * 15;
+    if (shakeDecay < 0) { shakeDecay = 0; shakeX = 0; shakeY = 0; }
+  }
+}
+
+// --- Die ---
+function die(reason) {
+  state = 'gameover';
+  if (score > bestScore) {
+    bestScore = Math.floor(score);
+    localStorage.setItem(LS_KEY, bestScore);
+  }
+  triggerShake(6);
+  const pos = lanePos(playerLane);
+  spawnParticles(pos.x, pos.y, 30, 15, 40, 150, 0.8);
+  btnsDiv.style.display = 'flex';
+}
+
+// --- Main Update ---
+function update(dt) {
+  if (state !== 'playing') return;
+
+  runTime += dt;
+  score += dt * 10;
+
+  // Coolant timer
+  if (coolantTimer > 0) {
+    coolantTimer -= dt;
+    if (coolantTimer < 0) coolantTimer = 0;
+  }
+
+  // Heat wave logic (after 45s)
+  if (runTime > 45) {
+    heatWaveCycle += dt;
+    if (!heatWaveActive && heatWaveCycle >= 12) {
+      heatWaveActive = true;
+      heatWaveTimer = 2.5;
+      heatWaveCycle = 0;
+    }
+    if (heatWaveActive) {
+      heatWaveTimer -= dt;
+      if (heatWaveTimer <= 0) {
+        heatWaveActive = false;
+        heatWaveCycle = 0;
+      }
+    }
+  }
+
+  // Hop animation
+  if (hopping) {
+    hopT += dt;
+    if (hopT >= HOP_DUR) {
+      hopping = false;
+      playerLane = hopTo;
+      hopT = HOP_DUR;
+    }
+  }
+
+  // Pad melting
+  const currentLane = hopping ? hopFrom : playerLane;
+  for (let i = 0; i < NUM_LANES; i++) {
+    if (!padAlive[i]) continue;
+    if (i === currentLane && !hopping) {
+      padMelt[i] += dt / meltTime(runTime);
+    } else {
+      // Slow recovery when not standing on it
+      padMelt[i] = Math.max(0, padMelt[i] - dt * 0.25);
+    }
+    if (padMelt[i] >= 1) {
+      padAlive[i] = false;
+      const pos = lanePos(i);
+      spawnParticles(pos.x, pos.y, 20, 20, 30, 100, 0.6);
+      if (i === playerLane && !hopping) {
+        die('Pad melted!');
+        return;
+      }
+    }
+  }
+
+  // Hazard spawning
+  spawnAccum += dt;
+  const interval = spawnInterval(runTime);
+  if (spawnAccum >= interval) {
+    spawnAccum -= interval;
+    spawnHazard();
+    // Double strike chance after 25s
+    if (runTime > 25 && Math.random() < Math.min(0.35, (runTime - 25) * 0.008)) {
+      spawnHazard();
+    }
+  }
+
+  // Hazard update
+  for (let i = hazards.length - 1; i >= 0; i--) {
+    const h = hazards[i];
+    h.t += dt;
+    if (h.t >= h.duration && !h.struck) {
+      h.struck = true;
+      // Impact!
+      const pos = lanePos(h.lane);
+      spawnParticles(pos.x, pos.y, 15, 10, 30, 120, 0.5);
+      triggerShake(2.5);
+
+      // Check collision
+      if (h.lane === playerLane && !hopping) {
+        if (playerShield) {
+          playerShield = false;
+          addTextPop(pos.x, pos.y - 30, 'BLOCKED!', '#44ddff', 16);
+          triggerShake(4);
+        } else {
+          die('Struck by molten rock!');
+          return;
+        }
+      }
+    }
+    // Remove old hazards
+    if (h.t > h.duration + 0.5) hazards.splice(i, 1);
+  }
+
+  // Powerup spawning (rare)
+  powerupSpawnAccum += dt;
+  if (powerupSpawnAccum >= 8 + rand(0, 5)) {
+    powerupSpawnAccum = 0;
+    if (powerups.length < 2) spawnPowerup();
+  }
+
+  // Powerup aging
+  for (let i = powerups.length - 1; i >= 0; i--) {
+    powerups[i].t += dt;
+    if (powerups[i].t > 6) powerups.splice(i, 1);
+  }
+
+  updateShake(dt);
+  updateLavaBubbles(dt);
+  updateParticles(dt);
+  updateTextPops(dt);
+}
+
+// --- Drawing ---
+function drawBackground() {
+  // Gradient lava background
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  let tint = heatWaveActive ? 15 : 0;
+  grad.addColorStop(0, hsl(10 + tint, 30, 8));
+  grad.addColorStop(0.5, hsl(15 + tint, 25, 6));
+  grad.addColorStop(1, hsl(5 + tint, 40, 10));
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+
+  // Heat wave overlay
+  if (heatWaveActive) {
+    ctx.fillStyle = `rgba(255, 40, 0, ${0.04 + 0.02 * Math.sin(runTime * 8)})`;
+    ctx.fillRect(0, 0, W, H);
+  }
+}
+
+function drawRing() {
+  // Draw connecting ring
+  ctx.beginPath();
+  ctx.arc(cx, cy, ringR, 0, Math.PI * 2);
+  ctx.strokeStyle = hsl(20, 30, 20, 0.3);
+  ctx.lineWidth = 2;
+  ctx.stroke();
+}
+
+function drawPads() {
+  for (let i = 0; i < NUM_LANES; i++) {
+    const pos = lanePos(i);
+    if (!padAlive[i]) {
+      // Draw broken pad remnants
+      ctx.beginPath();
+      ctx.arc(pos.x, pos.y, PAD_RADIUS * 0.6, 0, Math.PI * 2);
+      ctx.fillStyle = hsl(10, 20, 12, 0.3);
+      ctx.fill();
+      continue;
+    }
+
+    const melt = padMelt[i];
+
+    // Pad glow based on melt
+    if (melt > 0.3) {
+      ctx.beginPath();
+      ctx.arc(pos.x, pos.y, PAD_RADIUS + 6, 0, Math.PI * 2);
+      ctx.fillStyle = hsl(lerp(30, 5, melt), 90, 50, melt * 0.3);
+      ctx.fill();
+    }
+
+    // Main pad
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, PAD_RADIUS, 0, Math.PI * 2);
+    const padHue = lerp(35, 5, melt);
+    const padLight = lerp(25, 45, melt);
+    ctx.fillStyle = hsl(padHue, lerp(20, 80, melt), padLight);
+    ctx.fill();
+    ctx.strokeStyle = hsl(padHue, 40, padLight + 15, 0.6);
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Melt bar
+    if (melt > 0.05) {
+      const barW = PAD_RADIUS * 1.4;
+      const barH = 4;
+      const bx = pos.x - barW / 2;
+      const by = pos.y + PAD_RADIUS + 8;
+      ctx.fillStyle = hsl(0, 0, 20, 0.5);
+      ctx.fillRect(bx, by, barW, barH);
+      ctx.fillStyle = hsl(lerp(40, 0, melt), 90, 55, 0.9);
+      ctx.fillRect(bx, by, barW * melt, barH);
+    }
+
+    // Lane number
+    ctx.font = 'bold 11px system-ui,sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = hsl(30, 20, 55, 0.5);
+    ctx.fillText((i + 1).toString(), pos.x, pos.y + PAD_RADIUS + 18);
+  }
+}
+
+function drawHazards() {
+  for (const h of hazards) {
+    const pos = lanePos(h.lane);
+    const progress = h.t / h.duration;
+
+    if (!h.struck) {
+      // Telegraph ring — shrinks toward pad
+      const ringSize = PAD_RADIUS * (1 + 2 * (1 - progress));
+      const urgency = Math.pow(progress, 2);
+      const pulseAlpha = 0.3 + 0.5 * urgency + 0.15 * Math.sin(runTime * 20 * (1 + urgency));
+
+      ctx.beginPath();
+      ctx.arc(pos.x, pos.y, ringSize, 0, Math.PI * 2);
+      ctx.strokeStyle = hsl(lerp(50, 10, urgency), 95, lerp(60, 80, urgency), pulseAlpha);
+      ctx.lineWidth = lerp(2, 4, urgency);
+      ctx.stroke();
+
+      // Inner fill warning
+      if (progress > 0.6) {
+        ctx.beginPath();
+        ctx.arc(pos.x, pos.y, PAD_RADIUS, 0, Math.PI * 2);
+        ctx.fillStyle = hsl(10, 90, 50, (progress - 0.6) * 0.3);
+        ctx.fill();
+      }
+    } else {
+      // Impact burst
+      const burstT = h.t - h.duration;
+      if (burstT < 0.4) {
+        const burstP = burstT / 0.4;
+        const burstR = PAD_RADIUS + 30 * burstP;
+        ctx.beginPath();
+        ctx.arc(pos.x, pos.y, burstR, 0, Math.PI * 2);
+        ctx.fillStyle = hsl(20, 100, 65, (1 - burstP) * 0.5);
+        ctx.fill();
+      }
+    }
+  }
+}
+
+function drawPowerups() {
+  for (const pu of powerups) {
+    const pos = lanePos(pu.lane);
+    const bob = Math.sin(runTime * 4 + pu.lane) * 4;
+    const px = pos.x;
+    const py = pos.y - 20 + bob;
+    const blink = pu.t > 4.5 ? (Math.sin(runTime * 15) > 0 ? 1 : 0.3) : 1;
+
+    ctx.globalAlpha = blink;
+    if (pu.type === 'shield') {
+      // Shield icon — blue diamond
+      ctx.save();
+      ctx.translate(px, py);
+      ctx.beginPath();
+      ctx.moveTo(0, -10);
+      ctx.lineTo(8, 0);
+      ctx.lineTo(0, 12);
+      ctx.lineTo(-8, 0);
+      ctx.closePath();
+      ctx.fillStyle = hsl(200, 80, 60, 0.9);
+      ctx.fill();
+      ctx.strokeStyle = hsl(200, 90, 80, 0.8);
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.restore();
+    } else {
+      // Coolant icon — green circle with snowflake-ish
+      ctx.beginPath();
+      ctx.arc(px, py, 8, 0, Math.PI * 2);
+      ctx.fillStyle = hsl(160, 80, 50, 0.9);
+      ctx.fill();
+      ctx.strokeStyle = hsl(160, 90, 75, 0.8);
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      // Cross lines
+      ctx.beginPath();
+      ctx.moveTo(px, py - 5); ctx.lineTo(px, py + 5);
+      ctx.moveTo(px - 5, py); ctx.lineTo(px + 5, py);
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+}
+
+function drawPlayer() {
+  let px, py;
+
+  if (hopping) {
+    const p = easeOutCubic(Math.min(1, hopT / HOP_DUR));
+    const fromPos = lanePos(hopFrom);
+    const toPos = lanePos(hopTo);
+    px = lerp(fromPos.x, toPos.x, p);
+    py = lerp(fromPos.y, toPos.y, p) - Math.sin(p * Math.PI) * 18;
+  } else {
+    const pos = lanePos(playerLane);
+    px = pos.x;
+    py = pos.y;
+  }
+
+  // Coolant timer ring
+  if (coolantTimer > 0) {
+    ctx.beginPath();
+    ctx.arc(px, py, PLAYER_RADIUS + 6, -Math.PI / 2, -Math.PI / 2 + (coolantTimer / 2) * Math.PI * 2);
+    ctx.strokeStyle = hsl(160, 80, 60, 0.7);
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+  }
+
+  // Shield aura
+  if (playerShield) {
+    ctx.beginPath();
+    ctx.arc(px, py, PLAYER_RADIUS + 5, 0, Math.PI * 2);
+    ctx.strokeStyle = hsl(200, 80, 65, 0.4 + 0.2 * Math.sin(runTime * 5));
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = hsl(200, 60, 50, 0.1);
+    ctx.fill();
+  }
+
+  // Player body — HSL cycling
+  const playerHue = (runTime * 30 + 30) % 360;
+  ctx.beginPath();
+  ctx.arc(px, py, PLAYER_RADIUS, 0, Math.PI * 2);
+  const pgr = ctx.createRadialGradient(px - 3, py - 3, 2, px, py, PLAYER_RADIUS);
+  pgr.addColorStop(0, hsl(playerHue, 70, 70));
+  pgr.addColorStop(1, hsl(playerHue, 80, 45));
+  ctx.fillStyle = pgr;
+  ctx.fill();
+  ctx.strokeStyle = hsl(playerHue, 60, 80, 0.6);
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Eyes
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(px - 4, py - 2, 3, 0, Math.PI * 2);
+  ctx.arc(px + 4, py - 2, 3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#222';
+  ctx.beginPath();
+  ctx.arc(px - 3.5, py - 1.5, 1.5, 0, Math.PI * 2);
+  ctx.arc(px + 4.5, py - 1.5, 1.5, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawHUD() {
+  // Score
+  ctx.font = 'bold 22px system-ui,sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillStyle = '#e0d0c0';
+  ctx.fillText(Math.floor(score).toString(), cx, 20);
+
+  // Multiplier
+  if (mult > 1) {
+    const mScale = 1 + 0.1 * Math.sin(runTime * 6);
+    ctx.save();
+    ctx.translate(cx + 50, 28);
+    ctx.scale(mScale, mScale);
+    ctx.font = 'bold 16px system-ui,sans-serif';
+    ctx.fillStyle = hsl(50, 90, 60);
+    ctx.fillText('x' + mult, 0, 0);
+    ctx.restore();
+  }
+
+  // Streak
+  if (streak > 0) {
+    ctx.font = '12px system-ui,sans-serif';
+    ctx.fillStyle = hsl(50, 60, 50, 0.7);
+    ctx.fillText('streak ' + streak, cx, 48);
+  }
+
+  // Heat wave indicator
+  if (heatWaveActive) {
+    const flash = 0.5 + 0.5 * Math.sin(runTime * 10);
+    ctx.font = 'bold 13px system-ui,sans-serif';
+    ctx.fillStyle = hsl(5, 90, 55, flash);
+    ctx.fillText('HEAT WAVE', cx, 65);
+  }
+
+  // Shield indicator
+  if (playerShield) {
+    ctx.font = '11px system-ui,sans-serif';
+    ctx.fillStyle = hsl(200, 70, 65, 0.8);
+    ctx.textAlign = 'left';
+    ctx.fillText('SHIELD', 12, 20);
+  }
+
+  // Coolant indicator
+  if (coolantTimer > 0) {
+    ctx.font = '11px system-ui,sans-serif';
+    ctx.fillStyle = hsl(160, 70, 55, 0.8);
+    ctx.textAlign = 'right';
+    ctx.fillText('COOL ' + coolantTimer.toFixed(1) + 's', W - 12, 20);
+  }
+}
+
+function drawStartScreen() {
+  drawBackground();
+  drawLavaBubbles();
+
+  // Title
+  ctx.save();
+  const titleScale = 1 + 0.03 * Math.sin(performance.now() / 500);
+  ctx.translate(cx, H * 0.3);
+  ctx.scale(titleScale, titleScale);
+  ctx.font = 'bold 38px system-ui,sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  // Title glow
+  ctx.shadowColor = hsl(20, 100, 50, 0.5);
+  ctx.shadowBlur = 20;
+  ctx.fillStyle = hsl(30, 90, 65);
+  ctx.fillText('MAGMA', 0, -22);
+  ctx.fillStyle = hsl(15, 85, 55);
+  ctx.fillText('DRIFT', 0, 22);
+  ctx.shadowBlur = 0;
+  ctx.restore();
+
+  // Subtitle
+  ctx.font = '14px system-ui,sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = hsl(25, 40, 50, 0.7);
+  ctx.fillText('Melt Lanes', cx, H * 0.3 + 52);
+
+  // Challenge
+  if (challengeScore > 0) {
+    ctx.font = 'bold 15px system-ui,sans-serif';
+    ctx.fillStyle = hsl(50, 80, 60);
+    ctx.fillText('Can you beat ' + challengeScore + '?', cx, H * 0.45);
+  }
+
+  // Best score
+  if (bestScore > 0) {
+    ctx.font = '13px system-ui,sans-serif';
+    ctx.fillStyle = hsl(30, 30, 50, 0.7);
+    ctx.fillText('Best: ' + bestScore, cx, H * 0.52);
+  }
+
+  // Tap prompt
+  const tapAlpha = 0.5 + 0.4 * Math.sin(performance.now() / 400);
+  ctx.font = '16px system-ui,sans-serif';
+  ctx.fillStyle = hsl(30, 50, 65, tapAlpha);
+  ctx.fillText('Tap to Start', cx, H * 0.65);
+
+  // Instructions
+  ctx.font = '11px system-ui,sans-serif';
+  ctx.fillStyle = hsl(20, 20, 45, 0.5);
+  ctx.fillText('Hop lanes \u2022 Avoid strikes \u2022 Don\'t melt', cx, H * 0.72);
+}
+
+function drawGameOver() {
+  // Dim overlay
+  ctx.fillStyle = 'rgba(10,5,3,0.65)';
+  ctx.fillRect(0, 0, W, H);
+
+  // Game Over
+  ctx.font = 'bold 32px system-ui,sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = hsl(10, 80, 60);
+  ctx.fillText('GAME OVER', cx, H * 0.3);
+
+  // Score
+  ctx.font = 'bold 44px system-ui,sans-serif';
+  ctx.fillStyle = hsl(35, 80, 65);
+  ctx.fillText(Math.floor(score).toString(), cx, H * 0.42);
+
+  ctx.font = '13px system-ui,sans-serif';
+  ctx.fillStyle = hsl(30, 30, 50, 0.7);
+  ctx.fillText('SCORE', cx, H * 0.36);
+
+  // Best
+  ctx.font = '15px system-ui,sans-serif';
+  ctx.fillStyle = hsl(50, 60, 55);
+  ctx.fillText('Best: ' + bestScore, cx, H * 0.50);
+
+  // New best indicator
+  if (Math.floor(score) >= bestScore && bestScore > 0) {
+    ctx.font = 'bold 13px system-ui,sans-serif';
+    ctx.fillStyle = hsl(50, 90, 60);
+    ctx.fillText('NEW BEST!', cx, H * 0.55);
+  }
+
+  // Tap retry
+  const tapAlpha = 0.5 + 0.4 * Math.sin(performance.now() / 400);
+  ctx.font = '15px system-ui,sans-serif';
+  ctx.fillStyle = hsl(30, 50, 60, tapAlpha);
+  ctx.fillText('Tap to Retry', cx, H * 0.68);
+}
+
+// --- Main Render ---
+function render() {
+  ctx.save();
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+
+  if (state === 'start') {
+    drawStartScreen();
+  } else {
+    // Apply shake
+    ctx.save();
+    ctx.translate(shakeX, shakeY);
+
+    drawBackground();
+    drawLavaBubbles();
+    drawRing();
+    drawPads();
+    drawHazards();
+    drawPowerups();
+    drawPlayer();
+    drawParticles();
+    drawTextPops();
+    drawHUD();
+
+    ctx.restore();
+
+    if (state === 'gameover') {
+      drawGameOver();
+    }
+  }
+
+  ctx.restore();
+}
+
+// --- Game Loop ---
+let lastTime = 0;
+
+function gameLoop(timestamp) {
+  const dt = Math.min(0.05, (timestamp - lastTime) / 1000);
+  lastTime = timestamp;
+
+  if (state === 'start') {
+    // Animate background bubbles on start screen
+    updateLavaBubbles(dt);
+  }
+
+  update(dt);
+  render();
+  requestAnimationFrame(gameLoop);
+}
+
+// --- Input ---
+function handleInput(e) {
+  if (e) e.preventDefault();
+
+  if (state === 'start') {
+    state = 'playing';
+    initGame();
+    initLavaBubbles();
+  } else if (state === 'playing') {
+    hop();
+  } else if (state === 'gameover') {
+    // Check if clicking on buttons
+    if (e && e.target && (e.target.id === 'shareBtn' || e.target.id === 'copyBtn')) return;
+    state = 'start';
+    btnsDiv.style.display = 'none';
+  }
+}
+
+canvas.addEventListener('pointerdown', handleInput);
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'Space' || e.code === 'Enter') {
+    e.preventDefault();
+    handleInput(null);
+  }
+});
+
+// --- Share / Copy ---
+const GAME_URL = 'https://balinti.github.io/magma-drift/';
+
+shareBtn.addEventListener('pointerdown', (e) => {
+  e.stopPropagation();
+  const text = `I scored ${Math.floor(score)} in Magma Drift! Can you beat me?\n${GAME_URL}?challenge=${Math.floor(score)}`;
+  if (navigator.share) {
+    navigator.share({ title: 'Magma Drift', text, url: GAME_URL }).catch(() => {});
+  } else {
+    navigator.clipboard.writeText(text).then(() => {
+      addTextPop(cx, H * 0.6, 'Copied!', '#88ff88', 14);
+    }).catch(() => {});
+  }
+});
+
+copyBtn.addEventListener('pointerdown', (e) => {
+  e.stopPropagation();
+  const text = `I scored ${Math.floor(score)} in Magma Drift! Can you beat me?\n${GAME_URL}?challenge=${Math.floor(score)}`;
+  navigator.clipboard.writeText(text).then(() => {
+    addTextPop(cx, H * 0.6, 'Copied!', '#88ff88', 14);
+  }).catch(() => {});
+});
+
+// --- Challenge param ---
+function readChallenge() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const c = parseInt(params.get('challenge'));
+    if (c > 0) challengeScore = c;
+  } catch (e) {}
+}
+readChallenge();
+
+// --- Start ---
+requestAnimationFrame(gameLoop);
+
+})();
+</script>
+</body>
+</html>
