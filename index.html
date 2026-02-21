@@ -3,1079 +3,822 @@
 <head>
 <meta charset="UTF-8">
 <title>Magma Drift - Free HTML5 Game</title>
-<meta name="description" content="Play Magma Drift - Tap to jump between platforms and avoid molten falling debris while collecting unpredictable powerups.">
+<meta name="description" content="Play Magma Drift - Swipe to weave through lava flows while grabbing randomly spawning power boosts.">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#1a0a0a">
 <link rel="canonical" href="https://balinti.github.io/magma-drift/">
-
-<!-- Open Graph -->
 <meta property="og:type" content="website">
 <meta property="og:title" content="Magma Drift - Free HTML5 Game">
-<meta property="og:description" content="Tap to jump between platforms and avoid molten falling debris while collecting unpredictable powerups.">
+<meta property="og:description" content="Play Magma Drift - Swipe to weave through lava flows while grabbing randomly spawning power boosts.">
 <meta property="og:url" content="https://balinti.github.io/magma-drift/">
 <meta property="og:image" content="https://balinti.github.io/magma-drift/og-image.png">
-
-<!-- Twitter Card -->
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Magma Drift - Free HTML5 Game">
-<meta name="twitter:description" content="Tap to jump between platforms and avoid molten falling debris while collecting unpredictable powerups.">
+<meta name="twitter:description" content="Play Magma Drift - Swipe to weave through lava flows while grabbing randomly spawning power boosts.">
 <meta name="twitter:image" content="https://balinti.github.io/magma-drift/og-image.png">
-
-<!-- AdSense -->
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4099346100621490" crossorigin="anonymous"></script>
-
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{
   width:100%;height:100%;overflow:hidden;
-  background:#1a0a0a;
-  font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
-  color:#e0d0c0;
+  background:#080404;
   touch-action:none;
   -webkit-tap-highlight-color:transparent;
   user-select:none;-webkit-user-select:none;
 }
 #wrap{
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  width:100%;height:100%;
-  max-width:420px;max-height:750px;
-  margin:0 auto;position:relative;
+  position:absolute;
+  top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  width:min(100vw,420px);
+  height:min(100vh,750px);
 }
-canvas{
-  display:block;width:100%;height:100%;
-  border-radius:8px;
-  image-rendering:crisp-edges;
-}
-#seo{
-  position:absolute;bottom:0;left:0;right:0;
-  max-height:80px;overflow:auto;
-  padding:8px 12px;
-  font-size:11px;line-height:1.4;color:#6a5a4a;
-  text-align:center;
-  background:rgba(10,5,5,0.85);
-  border-top:1px solid #2a1a1a;
-  pointer-events:auto;
-  z-index:2;
-}
-#seo h2{font-size:12px;margin-bottom:3px;color:#8a7060}
-#seo a{color:#b06030;text-decoration:none}
-#btns{
-  display:none;position:absolute;bottom:90px;
-  z-index:10;gap:10px;
-}
-#btns button{
-  padding:8px 18px;border:none;border-radius:20px;
-  font-size:13px;font-weight:600;cursor:pointer;
-  background:rgba(200,100,40,0.85);color:#fff;
-  backdrop-filter:blur(4px);
-  transition:transform .1s;
-}
-#btns button:active{transform:scale(0.94)}
+canvas{display:block;width:100%;height:100%;}
 </style>
 </head>
 <body>
-<div id="wrap">
-  <canvas id="c"></canvas>
-  <div id="btns">
-    <button id="shareBtn">Share</button>
-    <button id="copyBtn">Copy</button>
-  </div>
-  <div id="seo">
-    <h2>About Magma Drift</h2>
-    <p>Magma Drift is a free hyper-casual HTML5 game. Tap to hop between basalt pads on a volcanic ring. Avoid molten rocks, time near-misses for bonus points, and collect shields and coolant powerups. How long can you survive the rising heat?</p>
-    <p><strong>How to play:</strong> Tap or press Space to hop to the next lane. Don't stay too long or the pad melts! Watch for telegraph rings warning of incoming strikes.</p>
-  </div>
-</div>
-
+<div id="wrap"><canvas id="c"></canvas></div>
 <script>
 "use strict";
-/* ======================================================================
-   MAGMA DRIFT — Melt Lanes
-   Hyper-casual HTML5 Canvas Game
-   ====================================================================== */
-
 (() => {
+// ============================================================
+//  MAGMA DRIFT  —  Switch-Skid
+//  Hyper-casual HTML5 canvas game
+// ============================================================
 
-// --- Canvas & DPR Setup ---
-const canvas = document.getElementById('c');
-const ctx = canvas.getContext('2d');
+const CV = document.getElementById('c');
+const ctx = CV.getContext('2d');
 const wrap = document.getElementById('wrap');
-const btnsDiv = document.getElementById('btns');
-const shareBtn = document.getElementById('shareBtn');
-const copyBtn = document.getElementById('copyBtn');
 
-let W, H, DPR, cx, cy, ringR;
-
+// ── Canvas / DPR ─────────────────────────────────────────────
+let W, H, DPR;
 function resize() {
-  const rect = wrap.getBoundingClientRect();
-  W = rect.width;
-  H = rect.height;
-  DPR = window.devicePixelRatio || 1;
-  canvas.width = W * DPR;
-  canvas.height = H * DPR;
-  canvas.style.width = W + 'px';
-  canvas.style.height = H + 'px';
-  cx = W * 0.5;
-  cy = H * 0.48;
-  ringR = Math.min(W, H) * 0.22;
+  const r = wrap.getBoundingClientRect();
+  W = r.width; H = r.height;
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  CV.width  = Math.round(W * DPR);
+  CV.height = Math.round(H * DPR);
+  CV.style.width  = W + 'px';
+  CV.style.height = H + 'px';
 }
 window.addEventListener('resize', resize);
 resize();
 
-// --- Constants ---
-const NUM_LANES = 4;
-const PAD_RADIUS = 28;
-const PLAYER_RADIUS = 12;
-const LS_KEY = 'magmaDriftBest';
+// ── Constants ────────────────────────────────────────────────
+const LS_KEY         = 'magmaDrift_v4';
+const GAME_URL       = 'https://balinti.github.io/magma-drift/';
+const PLAYER_R       = 11;
+const ARC_AMP        = 0.40;   // arc amplitude as fraction of W
+const PLAYER_Y_FRAC  = 0.70;   // player fixed Y fraction
+const NEAR_MARGIN    = 16;     // px: within this of gap edge → near-miss
+const HEAT_TO_SHIELD = 5;      // near-misses required for shield
+const GATE_THICK     = 18;
+const TRAIL_LEN      = 22;
+const CRASH_DUR      = 0.22;
 
-// --- State ---
-let state = 'start'; // start | playing | gameover
-let runTime = 0;
-let score = 0;
-let bestScore = parseInt(localStorage.getItem(LS_KEY)) || 0;
-let playerLane = 0;
-let playerShield = false;
-let coolantTimer = 0;
-let streak = 0;
-let mult = 1;
-let heatWaveTimer = 0;
-let heatWaveActive = false;
-let heatWaveCycle = 0;
+// ── Daily deterministic seed ──────────────────────────────────
+const DAILY_SEED = (() => {
+  const d = new Date();
+  const s = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return h;
+})();
 
-// Hop animation
-let hopping = false;
-let hopFrom = 0;
-let hopTo = 0;
-let hopT = 0;
-const HOP_DUR = 0.12;
+function lcg(seed)      { return (Math.imul(seed >>> 0, 1664525) + 1013904223) >>> 0; }
+function lcgFl(seed)    { return (lcg(seed) >>> 0) / 0x100000000; }
 
-// Pad melt state
-let padMelt = [0, 0, 0, 0]; // 0..1
-let padAlive = [true, true, true, true];
+// ── Gate templates ────────────────────────────────────────────
+// Each template: array of gaps {c: center (0..1 of W)}
+// Width is overridden by difficulty gapW at spawn time.
+const TMPLS = [
+  [{ c: 0.50 }],              // 0 centre
+  [{ c: 0.30 }],              // 1 left
+  [{ c: 0.70 }],              // 2 right
+  [{ c: 0.50 }],              // 3 centre (weight)
+  [{ c: 0.40 }],              // 4 left-centre
+  [{ c: 0.60 }],              // 5 right-centre
+  [{ c: 0.35 }],              // 6 left-mid
+  [{ c: 0.65 }],              // 7 right-mid
+  [{ c: 0.28 }, { c: 0.72 }],// 8 twin-gap wide
+  [{ c: 0.35 }, { c: 0.65 }],// 9 twin-gap close
+];
+const POOL_EARLY = [0,3,4,5];
+const POOL_MID   = [0,1,2,3,4,5,6,7];
+const POOL_LATE  = [0,1,2,3,4,5,6,7,8,9];
 
-// Hazards
-let hazards = []; // {lane, t, duration, struck}
-let spawnAccum = 0;
+function pickTemplate(gi, t) {
+  const seed = lcg(DAILY_SEED ^ ((gi * 2654435761) >>> 0));
+  const pool = t < 10 ? POOL_EARLY : t < 25 ? POOL_MID : POOL_LATE;
+  return TMPLS[pool[seed % pool.length]];
+}
 
-// Powerups
-let powerups = []; // {lane, type:'shield'|'coolant', t}
-let powerupSpawnAccum = 0;
+// ── Difficulty ────────────────────────────────────────────────
+let heatWaveActive = false; // referenced in getDiff
 
-// Particles
-let particles = [];
-let lavaBubbles = [];
-let textPops = [];
+function getDiff(t) {
+  const hw = heatWaveActive;
+  return {
+    scroll:   Math.min(340, 160 + t * 2.5),
+    arcSpd:   (Math.min(2.0, 1.30 + t * 0.013)) * (hw ? 1.28 : 1),
+    gapW:     Math.max(0.18, 0.42 - t * 0.003),
+    spacing:  Math.max(148, 268 - t * 1.7),
+  };
+}
 
-// Screen shake
-let shakeX = 0, shakeY = 0, shakeDecay = 0;
-
-// Challenge score from URL
+// ── State ─────────────────────────────────────────────────────
+let state       = 'start';   // 'start' | 'playing' | 'gameover'
+let gameTime    = 0;
+let meters      = 0;
+let totalNM     = 0;   // total near-misses
+let nmStreak    = 0;   // current near-miss streak
+let maxStreak   = 0;
+let heatCount   = 0;   // 0..HEAT_TO_SHIELD
+let hasShield   = false;
+let arcPhase    = 0;
+let driftDir    = 1;
+let playerX     = 0;
+let gates       = [];
+let gateIdx     = 0;
+let trail       = [];
+let particles   = [];
+let shakeAmt    = 0;
+let crashZoom   = 1;
+let crashTimer  = 0;
+let hueShift    = 0;
+let heatWaveTimer  = 0;
+let heatWaveCycle  = 0;
+let pulsePhase     = 0;
+let finalScore     = 0;
+let bestScore      = parseInt(localStorage.getItem(LS_KEY)) || 0;
+let isNewBest      = false;
 let challengeScore = 0;
+let challengeStreak= 0;
+let shareToast     = 0;
+let shareBox       = null;
+let bgBubbles      = makeBubbles();
 
-// --- Utility ---
-function lerp(a, b, t) { return a + (b - a) * t; }
-function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
-function rand(a, b) { return a + Math.random() * (b - a); }
-function randInt(a, b) { return Math.floor(rand(a, b + 1)); }
-function hsl(h, s, l, a) { return a !== undefined ? `hsla(${h},${s}%,${l}%,${a})` : `hsl(${h},${s}%,${l}%)`; }
+// ── URL params ────────────────────────────────────────────────
+(function readParams() {
+  try {
+    const p = new URLSearchParams(location.search);
+    challengeScore  = parseInt(p.get('challengeScore')) || 0;
+    challengeStreak = parseInt(p.get('streak')) || 0;
+  } catch(e) {}
+})();
 
-function lanePos(i) {
-  const angle = -Math.PI / 2 + i * (Math.PI / 2);
-  return { x: cx + Math.cos(angle) * ringR, y: cy + Math.sin(angle) * ringR };
-}
-
-// --- Difficulty functions ---
-function meltTime(t) { return Math.max(0.85, 2.20 - 0.018 * t); }
-function telegraphTime(t) {
-  let base = Math.max(0.45, 0.75 - 0.005 * t);
-  if (coolantTimer > 0) base *= 1.35;
-  if (heatWaveActive) base *= 0.85;
-  return base;
-}
-function spawnInterval(t) { return Math.max(0.55, 1.20 - 0.0105 * t); }
-const NEAR_WINDOW = 0.12;
-function nearWindow() { return heatWaveActive ? 0.14 : 0.12; }
-
-// --- Init / Reset ---
-function initGame() {
-  runTime = 0;
-  score = 0;
-  playerLane = 0;
-  playerShield = false;
-  coolantTimer = 0;
-  streak = 0;
-  mult = 1;
-  heatWaveTimer = 0;
-  heatWaveActive = false;
-  heatWaveCycle = 0;
-  hopping = false;
-  padMelt = [0, 0, 0, 0];
-  padAlive = [true, true, true, true];
-  hazards = [];
-  spawnAccum = 0;
-  powerups = [];
-  powerupSpawnAccum = 0;
-  particles = [];
-  textPops = [];
-  shakeX = 0; shakeY = 0; shakeDecay = 0;
-  btnsDiv.style.display = 'none';
-}
-
-// --- Lava Bubbles (background) ---
-function initLavaBubbles() {
-  lavaBubbles = [];
-  for (let i = 0; i < 20; i++) {
-    lavaBubbles.push({
-      x: rand(0, W), y: rand(0, H),
-      r: rand(2, 6), speed: rand(8, 25),
-      hue: rand(10, 40), alpha: rand(0.15, 0.4),
-      phase: rand(0, Math.PI * 2)
+// ── Background bubbles ────────────────────────────────────────
+function makeBubbles() {
+  const a = [];
+  for (let i = 0; i < 22; i++) {
+    a.push({
+      x: Math.random() * 420, y: Math.random() * 750,
+      r: 1.5 + Math.random() * 3.5,
+      spd: 10 + Math.random() * 22,
+      ph: Math.random() * 6.28,
+      al: 0.09 + Math.random() * 0.18,
+      hue: 8 + Math.random() * 28,
     });
   }
+  return a;
 }
-initLavaBubbles();
-
-function updateLavaBubbles(dt) {
-  for (const b of lavaBubbles) {
-    b.y -= b.speed * dt;
-    b.x += Math.sin(b.phase + runTime * 1.5) * 12 * dt;
-    b.alpha = 0.15 + 0.15 * Math.sin(b.phase + runTime * 2);
-    if (b.y < -10) {
-      b.y = H + 10;
-      b.x = rand(0, W);
-    }
+function updateBubbles(dt) {
+  for (const b of bgBubbles) {
+    b.y -= b.spd * dt;
+    if (b.y < -8) { b.y = H + 8; b.x = Math.random() * W; }
   }
 }
 
-function drawLavaBubbles() {
-  for (const b of lavaBubbles) {
-    ctx.beginPath();
-    ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
-    ctx.fillStyle = hsl(b.hue, 90, 55, b.alpha);
-    ctx.fill();
-  }
-}
-
-// --- Particles ---
-function spawnParticles(x, y, count, hueBase, spread, speed, life) {
+// ── Particles ─────────────────────────────────────────────────
+function burst(x, y, count, hue, blue) {
   for (let i = 0; i < count; i++) {
-    const angle = rand(0, Math.PI * 2);
-    const spd = rand(speed * 0.3, speed);
+    const ang = Math.random() * 6.28;
+    const spd = 40 + Math.random() * 130;
     particles.push({
       x, y,
-      vx: Math.cos(angle) * spd * rand(0.5, 1),
-      vy: Math.sin(angle) * spd * rand(0.5, 1) - rand(10, 40),
-      r: rand(1.5, 4),
-      hue: hueBase + rand(-15, 15),
-      life: rand(life * 0.5, life),
-      maxLife: life,
-      gravity: rand(40, 100)
+      vx: Math.cos(ang) * spd,
+      vy: Math.sin(ang) * spd - 40,
+      r:  2.5 + Math.random() * 4,
+      hue: blue ? 200 : hue + (Math.random() - .5) * 20,
+      sat: blue ? 80 : 88,
+      lit: 60,
+      life: 0.4 + Math.random() * 0.5,
+      maxL: 0.9,
+      grav: 200,
     });
   }
 }
-
-function updateParticles(dt) {
+function updatePart(dt) {
   for (let i = particles.length - 1; i >= 0; i--) {
     const p = particles[i];
-    p.x += p.vx * dt;
-    p.y += p.vy * dt;
-    p.vy += p.gravity * dt;
+    p.x  += p.vx * dt;
+    p.y  += p.vy * dt;
+    p.vy += p.grav * dt;
     p.life -= dt;
     if (p.life <= 0) particles.splice(i, 1);
   }
 }
 
-function drawParticles() {
-  for (const p of particles) {
-    const a = Math.max(0, p.life / p.maxLife);
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, p.r * a, 0, Math.PI * 2);
-    ctx.fillStyle = hsl(p.hue, 90, 60, a * 0.9);
-    ctx.fill();
-  }
+// ── Screen shake ──────────────────────────────────────────────
+function shake(amt) { shakeAmt = Math.max(shakeAmt, amt); }
+
+// ── Init game ─────────────────────────────────────────────────
+function initGame() {
+  gameTime = 0; meters = 0;
+  totalNM = 0; nmStreak = 0; maxStreak = 0;
+  heatCount = 0; hasShield = false;
+  arcPhase = 0; driftDir = 1;
+  gates = []; gateIdx = 0;
+  trail = []; particles = [];
+  shakeAmt = 0; crashZoom = 1; crashTimer = 0;
+  hueShift = 0; heatWaveActive = false;
+  heatWaveTimer = 0; heatWaveCycle = 0;
+  pulsePhase = 0;
+  finalScore = 0; isNewBest = false;
+  shareToast = 0; shareBox = null;
+  // Pre-fill gate queue
+  let y = H + 70;
+  for (let i = 0; i < 5; i++) { spawnGate(y); y += getDiff(0).spacing; }
 }
 
-// --- Text Pops ---
-function addTextPop(x, y, text, color, size) {
-  textPops.push({ x, y, text, color, size: size || 16, t: 0, dur: 0.7 });
+// ── Gate spawn ────────────────────────────────────────────────
+function spawnGate(y) {
+  const diff   = getDiff(gameTime);
+  const tmpl   = pickTemplate(gateIdx, gameTime);
+  const seed   = lcg(DAILY_SEED ^ gateIdx);
+  const isPulse= gameTime >= 45 && (gateIdx % 3 === 2);
+  gates.push({
+    y,
+    gaps: tmpl.map(g => ({ c: g.c, w: diff.gapW })),
+    isPulse,
+    pOff: isPulse ? lcgFl(seed) * 6.28 : 0,
+    done: false,
+  });
+  gateIdx++;
 }
 
-function updateTextPops(dt) {
-  for (let i = textPops.length - 1; i >= 0; i--) {
-    const tp = textPops[i];
-    tp.t += dt;
-    if (tp.t >= tp.dur) textPops.splice(i, 1);
-  }
+// ── Get actual gap rects for a gate ───────────────────────────
+function gapRects(gate) {
+  return gate.gaps.map(g => {
+    let cx = g.c;
+    if (gate.isPulse) {
+      cx += 0.10 * Math.sin(pulsePhase * 2.6 + gate.pOff);
+      const hw = g.w * 0.5 + 0.04;
+      cx = Math.max(hw, Math.min(1 - hw, cx));
+    }
+    const hw = g.w * W * 0.5;
+    return { l: cx * W - hw, r: cx * W + hw };
+  });
 }
 
-function drawTextPops() {
-  for (const tp of textPops) {
-    const p = tp.t / tp.dur;
-    const a = 1 - p;
-    const scale = 1 + 0.3 * Math.sin(p * Math.PI);
-    ctx.save();
-    ctx.translate(tp.x, tp.y - p * 30);
-    ctx.scale(scale, scale);
-    ctx.globalAlpha = a;
-    ctx.font = `bold ${tp.size}px 'Segoe UI',system-ui,sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = tp.color;
-    ctx.fillText(tp.text, 0, 0);
-    ctx.globalAlpha = 1;
-    ctx.restore();
-  }
-}
-
-// --- Hazard Spawning ---
-function spawnHazard() {
-  const tTime = telegraphTime(runTime);
-  // Pick a lane, fairness: avoid player's current lane if telegraph is too short
-  let candidates = [];
-  const activeLanes = [];
-  for (let i = 0; i < NUM_LANES; i++) {
-    if (padAlive[i]) activeLanes.push(i);
-  }
-
-  // Check which lanes are already under threat
-  const threatenedLanes = new Set(hazards.filter(h => !h.struck).map(h => h.lane));
-
-  // Determine if we can do a double strike
-  const safeLanesNeeded = 2;
-  const availableForStrike = activeLanes.filter(l => !threatenedLanes.has(l));
-
-  if (availableForStrike.length <= safeLanesNeeded) return; // Don't spawn if it would be unfair
-
-  for (const l of availableForStrike) {
-    // Fairness: don't target player lane with very short telegraph
-    if (l === playerLane && tTime < 0.5) continue;
-    candidates.push(l);
-  }
-  if (candidates.length === 0) return;
-
-  const lane = candidates[randInt(0, candidates.length - 1)];
-  hazards.push({ lane, t: 0, duration: tTime, struck: false });
-}
-
-// --- Powerup Spawning ---
-function spawnPowerup() {
-  // Spawn on a random alive lane that doesn't have a powerup already
-  const used = new Set(powerups.map(p => p.lane));
-  const available = [];
-  for (let i = 0; i < NUM_LANES; i++) {
-    if (padAlive[i] && !used.has(i)) available.push(i);
-  }
-  if (available.length === 0) return;
-  const lane = available[randInt(0, available.length - 1)];
-  const type = Math.random() < 0.5 ? 'shield' : 'coolant';
-  powerups.push({ lane, type, t: 0 });
-}
-
-// --- Player Hop ---
-function hop() {
-  if (hopping) return;
-
-  // Find next alive lane
-  let next = (playerLane + 1) % NUM_LANES;
-  let attempts = 0;
-  while (!padAlive[next] && attempts < NUM_LANES) {
-    next = (next + 1) % NUM_LANES;
-    attempts++;
-  }
-  if (attempts >= NUM_LANES) {
-    die('No pads left!');
-    return;
-  }
-
-  hopFrom = playerLane;
-  hopTo = next;
-  hopping = true;
-  hopT = 0;
-
-  // Check near-miss on hazards we're leaving
-  let nearMiss = false;
-  let nearBonus = 0;
-  for (const h of hazards) {
-    if (h.lane === playerLane && !h.struck) {
-      const rem = h.duration - h.t;
-      const nw = nearWindow();
-      if (rem > 0 && rem <= nw) {
-        nearMiss = true;
-        nearBonus = Math.max(nearBonus, Math.floor(40 * (1 - rem / nw)));
-      }
+// ── Collision ─────────────────────────────────────────────────
+function checkCol(gate, px) {
+  for (const r of gapRects(gate)) {
+    if (px + PLAYER_R > r.l && px - PLAYER_R < r.r) {
+      const dl = (px - PLAYER_R) - r.l;
+      const dr = r.r - (px + PLAYER_R);
+      return Math.min(dl, dr) < NEAR_MARGIN ? 'near' : 'pass';
     }
   }
-
-  if (nearMiss) {
-    streak++;
-    const pos = lanePos(playerLane);
-    addTextPop(pos.x, pos.y - 30, 'NEAR!', '#ffee44', 18);
-    spawnParticles(pos.x, pos.y, 8, 50, 20, 80, 0.4);
-    triggerShake(2);
-  } else {
-    streak = 0;
-  }
-
-  mult = Math.min(6, 1 + Math.floor(streak / 3));
-  const hopPoints = (12 + nearBonus) * mult;
-  score += hopPoints;
-
-  if (hopPoints > 12) {
-    const pos = lanePos(hopTo);
-    addTextPop(pos.x + 25, pos.y - 15, '+' + hopPoints, '#ffcc33', 14);
-  }
-
-  // Pick up powerup at destination
-  for (let i = powerups.length - 1; i >= 0; i--) {
-    if (powerups[i].lane === hopTo) {
-      const pu = powerups[i];
-      if (pu.type === 'shield') {
-        playerShield = true;
-        addTextPop(lanePos(hopTo).x, lanePos(hopTo).y - 40, 'SHIELD!', '#44ddff', 16);
-      } else {
-        coolantTimer = 2;
-        addTextPop(lanePos(hopTo).x, lanePos(hopTo).y - 40, 'COOLANT!', '#44ffaa', 16);
-      }
-      powerups.splice(i, 1);
-    }
-  }
-
-  // Landing dust
-  const dest = lanePos(hopTo);
-  spawnParticles(dest.x, dest.y + 10, 5, 30, 15, 40, 0.3);
+  return 'hit';
 }
 
-// --- Screen Shake ---
-function triggerShake(intensity) {
-  shakeDecay = intensity;
-}
-
-function updateShake(dt) {
-  if (shakeDecay > 0) {
-    shakeX = (Math.random() - 0.5) * shakeDecay * 4;
-    shakeY = (Math.random() - 0.5) * shakeDecay * 4;
-    shakeDecay -= dt * 15;
-    if (shakeDecay < 0) { shakeDecay = 0; shakeX = 0; shakeY = 0; }
-  }
-}
-
-// --- Die ---
-function die(reason) {
+// ── Die ───────────────────────────────────────────────────────
+function die() {
+  finalScore = Math.round(meters) + totalNM * 12 + maxStreak * 25;
+  isNewBest  = finalScore > bestScore;
+  if (isNewBest) { bestScore = finalScore; localStorage.setItem(LS_KEY, bestScore); }
+  shake(9); crashTimer = CRASH_DUR;
+  burst(playerX, H * PLAYER_Y_FRAC, 28, 15, false);
   state = 'gameover';
-  if (score > bestScore) {
-    bestScore = Math.floor(score);
-    localStorage.setItem(LS_KEY, bestScore);
-  }
-  triggerShake(6);
-  const pos = lanePos(playerLane);
-  spawnParticles(pos.x, pos.y, 30, 15, 40, 150, 0.8);
-  btnsDiv.style.display = 'flex';
 }
 
-// --- Main Update ---
+// ── Update ────────────────────────────────────────────────────
 function update(dt) {
   if (state !== 'playing') return;
 
-  runTime += dt;
-  score += dt * 10;
+  gameTime += dt;
+  hueShift  = (hueShift + 38 * dt) % 360;
+  pulsePhase += dt * 1.4;
 
-  // Coolant timer
-  if (coolantTimer > 0) {
-    coolantTimer -= dt;
-    if (coolantTimer < 0) coolantTimer = 0;
-  }
+  const diff = getDiff(gameTime);
 
-  // Heat wave logic (after 45s)
-  if (runTime > 45) {
+  // Heat wave (45s+, every 14s, lasts 3s)
+  if (gameTime > 45) {
     heatWaveCycle += dt;
-    if (!heatWaveActive && heatWaveCycle >= 12) {
-      heatWaveActive = true;
-      heatWaveTimer = 2.5;
-      heatWaveCycle = 0;
+    if (!heatWaveActive && heatWaveCycle >= 14) {
+      heatWaveActive = true; heatWaveTimer = 3; heatWaveCycle = 0;
     }
-    if (heatWaveActive) {
-      heatWaveTimer -= dt;
-      if (heatWaveTimer <= 0) {
-        heatWaveActive = false;
-        heatWaveCycle = 0;
-      }
-    }
+    if (heatWaveActive) { heatWaveTimer -= dt; if (heatWaveTimer <= 0) heatWaveActive = false; }
   }
 
-  // Hop animation
-  if (hopping) {
-    hopT += dt;
-    if (hopT >= HOP_DUR) {
-      hopping = false;
-      playerLane = hopTo;
-      hopT = HOP_DUR;
-    }
-  }
+  // Player arc
+  arcPhase += driftDir * diff.arcSpd * dt;
+  playerX   = W * 0.5 + Math.sin(arcPhase) * W * ARC_AMP;
+  playerX   = Math.max(PLAYER_R + 2, Math.min(W - PLAYER_R - 2, playerX));
 
-  // Pad melting
-  const currentLane = hopping ? hopFrom : playerLane;
-  for (let i = 0; i < NUM_LANES; i++) {
-    if (!padAlive[i]) continue;
-    if (i === currentLane && !hopping) {
-      padMelt[i] += dt / meltTime(runTime);
-    } else {
-      // Slow recovery when not standing on it
-      padMelt[i] = Math.max(0, padMelt[i] - dt * 0.25);
-    }
-    if (padMelt[i] >= 1) {
-      padAlive[i] = false;
-      const pos = lanePos(i);
-      spawnParticles(pos.x, pos.y, 20, 20, 30, 100, 0.6);
-      if (i === playerLane && !hopping) {
-        die('Pad melted!');
-        return;
-      }
-    }
-  }
+  const playerY = H * PLAYER_Y_FRAC;
 
-  // Hazard spawning
-  spawnAccum += dt;
-  const interval = spawnInterval(runTime);
-  if (spawnAccum >= interval) {
-    spawnAccum -= interval;
-    spawnHazard();
-    // Double strike chance after 25s
-    if (runTime > 25 && Math.random() < Math.min(0.35, (runTime - 25) * 0.008)) {
-      spawnHazard();
-    }
-  }
+  // Meters
+  meters += diff.scroll * dt / 80;
 
-  // Hazard update
-  for (let i = hazards.length - 1; i >= 0; i--) {
-    const h = hazards[i];
-    h.t += dt;
-    if (h.t >= h.duration && !h.struck) {
-      h.struck = true;
-      // Impact!
-      const pos = lanePos(h.lane);
-      spawnParticles(pos.x, pos.y, 15, 10, 30, 120, 0.5);
-      triggerShake(2.5);
+  // Trail
+  trail.push({ x: playerX, y: playerY });
+  if (trail.length > TRAIL_LEN) trail.shift();
 
-      // Check collision
-      if (h.lane === playerLane && !hopping) {
-        if (playerShield) {
-          playerShield = false;
-          addTextPop(pos.x, pos.y - 30, 'BLOCKED!', '#44ddff', 16);
-          triggerShake(4);
-        } else {
-          die('Struck by molten rock!');
-          return;
+  // Scroll gates & collision
+  for (let i = gates.length - 1; i >= 0; i--) {
+    const g = gates[i];
+    g.y -= diff.scroll * dt;
+
+    if (!g.done && g.y <= playerY && g.y + GATE_THICK >= playerY - PLAYER_R) {
+      g.done = true;
+      const res = checkCol(g, playerX);
+      if (res === 'hit') {
+        if (hasShield) {
+          hasShield = false; nmStreak = 0;
+          shake(5); burst(playerX, playerY, 16, 200, true);
+        } else { die(); return; }
+      } else if (res === 'near') {
+        totalNM++; nmStreak++;
+        if (nmStreak > maxStreak) maxStreak = nmStreak;
+        heatCount++;
+        if (heatCount >= HEAT_TO_SHIELD) {
+          heatCount = 0; hasShield = true;
+          burst(playerX, playerY - 22, 14, 200, true);
         }
+        shake(1.8);
+        burst(playerX, playerY, 7, 25, false);
+      } else {
+        nmStreak = 0; // clean pass resets streak
       }
     }
-    // Remove old hazards
-    if (h.t > h.duration + 0.5) hazards.splice(i, 1);
+    if (g.y + GATE_THICK < -30) gates.splice(i, 1);
   }
 
-  // Powerup spawning (rare)
-  powerupSpawnAccum += dt;
-  if (powerupSpawnAccum >= 8 + rand(0, 5)) {
-    powerupSpawnAccum = 0;
-    if (powerups.length < 2) spawnPowerup();
+  // Spawn gates to keep queue filled (2 screens ahead)
+  while (gates.length === 0 || gates[gates.length - 1].y < H + diff.spacing) {
+    const prevY = gates.length > 0 ? gates[gates.length - 1].y : H + 70;
+    spawnGate(prevY + diff.spacing);
   }
 
-  // Powerup aging
-  for (let i = powerups.length - 1; i >= 0; i--) {
-    powerups[i].t += dt;
-    if (powerups[i].t > 6) powerups.splice(i, 1);
-  }
-
-  updateShake(dt);
-  updateLavaBubbles(dt);
-  updateParticles(dt);
-  updateTextPops(dt);
+  // Particles & effects
+  updatePart(dt);
+  shakeAmt  = Math.max(0, shakeAmt - dt * 11);
+  if (crashTimer > 0) {
+    crashTimer -= dt;
+    crashZoom  = 1 + 0.12 * Math.max(0, crashTimer / CRASH_DUR);
+  } else { crashZoom = 1; }
+  if (shareToast > 0) shareToast -= dt;
 }
 
-// --- Drawing ---
-function drawBackground() {
-  // Gradient lava background
-  const grad = ctx.createLinearGradient(0, 0, 0, H);
-  let tint = heatWaveActive ? 15 : 0;
-  grad.addColorStop(0, hsl(10 + tint, 30, 8));
-  grad.addColorStop(0.5, hsl(15 + tint, 25, 6));
-  grad.addColorStop(1, hsl(5 + tint, 40, 10));
-  ctx.fillStyle = grad;
+// ── Helpers ───────────────────────────────────────────────────
+function hsl(h, s, l, a) {
+  return a !== undefined
+    ? `hsla(${h|0},${s}%,${l}%,${a})`
+    : `hsl(${h|0},${s}%,${l}%)`;
+}
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+// ── Draw: background ─────────────────────────────────────────
+function drawBG() {
+  const hw = heatWaveActive;
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0,   hsl(hw ? 18 : 8,  35, 7));
+  g.addColorStop(0.6, hsl(hw ? 14 : 12, 28, 5));
+  g.addColorStop(1,   hsl(hw ? 6  : 4,  45, 10));
+  ctx.fillStyle = g;
   ctx.fillRect(0, 0, W, H);
 
-  // Heat wave overlay
-  if (heatWaveActive) {
-    ctx.fillStyle = `rgba(255, 40, 0, ${0.04 + 0.02 * Math.sin(runTime * 8)})`;
+  if (hw) {
+    ctx.fillStyle = `rgba(255,55,0,${0.04 + 0.025 * Math.sin(gameTime * 9)})`;
     ctx.fillRect(0, 0, W, H);
   }
-}
 
-function drawRing() {
-  // Draw connecting ring
-  ctx.beginPath();
-  ctx.arc(cx, cy, ringR, 0, Math.PI * 2);
-  ctx.strokeStyle = hsl(20, 30, 20, 0.3);
-  ctx.lineWidth = 2;
-  ctx.stroke();
-}
-
-function drawPads() {
-  for (let i = 0; i < NUM_LANES; i++) {
-    const pos = lanePos(i);
-    if (!padAlive[i]) {
-      // Draw broken pad remnants
-      ctx.beginPath();
-      ctx.arc(pos.x, pos.y, PAD_RADIUS * 0.6, 0, Math.PI * 2);
-      ctx.fillStyle = hsl(10, 20, 12, 0.3);
-      ctx.fill();
-      continue;
-    }
-
-    const melt = padMelt[i];
-
-    // Pad glow based on melt
-    if (melt > 0.3) {
-      ctx.beginPath();
-      ctx.arc(pos.x, pos.y, PAD_RADIUS + 6, 0, Math.PI * 2);
-      ctx.fillStyle = hsl(lerp(30, 5, melt), 90, 50, melt * 0.3);
-      ctx.fill();
-    }
-
-    // Main pad
+  // Bubbles
+  for (const b of bgBubbles) {
     ctx.beginPath();
-    ctx.arc(pos.x, pos.y, PAD_RADIUS, 0, Math.PI * 2);
-    const padHue = lerp(35, 5, melt);
-    const padLight = lerp(25, 45, melt);
-    ctx.fillStyle = hsl(padHue, lerp(20, 80, melt), padLight);
+    ctx.arc(b.x, b.y, b.r, 0, 6.28);
+    ctx.fillStyle = hsl(b.hue, 88, 55, b.al + 0.08 * Math.sin(b.ph + gameTime * 2));
     ctx.fill();
-    ctx.strokeStyle = hsl(padHue, 40, padLight + 15, 0.6);
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    // Melt bar
-    if (melt > 0.05) {
-      const barW = PAD_RADIUS * 1.4;
-      const barH = 4;
-      const bx = pos.x - barW / 2;
-      const by = pos.y + PAD_RADIUS + 8;
-      ctx.fillStyle = hsl(0, 0, 20, 0.5);
-      ctx.fillRect(bx, by, barW, barH);
-      ctx.fillStyle = hsl(lerp(40, 0, melt), 90, 55, 0.9);
-      ctx.fillRect(bx, by, barW * melt, barH);
-    }
-
-    // Lane number
-    ctx.font = 'bold 11px system-ui,sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = hsl(30, 20, 55, 0.5);
-    ctx.fillText((i + 1).toString(), pos.x, pos.y + PAD_RADIUS + 18);
   }
-}
 
-function drawHazards() {
-  for (const h of hazards) {
-    const pos = lanePos(h.lane);
-    const progress = h.t / h.duration;
-
-    if (!h.struck) {
-      // Telegraph ring — shrinks toward pad
-      const ringSize = PAD_RADIUS * (1 + 2 * (1 - progress));
-      const urgency = Math.pow(progress, 2);
-      const pulseAlpha = 0.3 + 0.5 * urgency + 0.15 * Math.sin(runTime * 20 * (1 + urgency));
-
-      ctx.beginPath();
-      ctx.arc(pos.x, pos.y, ringSize, 0, Math.PI * 2);
-      ctx.strokeStyle = hsl(lerp(50, 10, urgency), 95, lerp(60, 80, urgency), pulseAlpha);
-      ctx.lineWidth = lerp(2, 4, urgency);
-      ctx.stroke();
-
-      // Inner fill warning
-      if (progress > 0.6) {
-        ctx.beginPath();
-        ctx.arc(pos.x, pos.y, PAD_RADIUS, 0, Math.PI * 2);
-        ctx.fillStyle = hsl(10, 90, 50, (progress - 0.6) * 0.3);
-        ctx.fill();
-      }
-    } else {
-      // Impact burst
-      const burstT = h.t - h.duration;
-      if (burstT < 0.4) {
-        const burstP = burstT / 0.4;
-        const burstR = PAD_RADIUS + 30 * burstP;
-        ctx.beginPath();
-        ctx.arc(pos.x, pos.y, burstR, 0, Math.PI * 2);
-        ctx.fillStyle = hsl(20, 100, 65, (1 - burstP) * 0.5);
-        ctx.fill();
-      }
-    }
-  }
-}
-
-function drawPowerups() {
-  for (const pu of powerups) {
-    const pos = lanePos(pu.lane);
-    const bob = Math.sin(runTime * 4 + pu.lane) * 4;
-    const px = pos.x;
-    const py = pos.y - 20 + bob;
-    const blink = pu.t > 4.5 ? (Math.sin(runTime * 15) > 0 ? 1 : 0.3) : 1;
-
-    ctx.globalAlpha = blink;
-    if (pu.type === 'shield') {
-      // Shield icon — blue diamond
+  // Speed lines on playing
+  if (state === 'playing') {
+    const spd = getDiff(gameTime).scroll;
+    const intensity = Math.min(1, (spd - 160) / 180);
+    if (intensity > 0) {
       ctx.save();
-      ctx.translate(px, py);
-      ctx.beginPath();
-      ctx.moveTo(0, -10);
-      ctx.lineTo(8, 0);
-      ctx.lineTo(0, 12);
-      ctx.lineTo(-8, 0);
-      ctx.closePath();
-      ctx.fillStyle = hsl(200, 80, 60, 0.9);
-      ctx.fill();
-      ctx.strokeStyle = hsl(200, 90, 80, 0.8);
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
+      ctx.globalAlpha = 0.07 * intensity;
+      ctx.strokeStyle = hsl(hueShift, 70, 60);
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 8; i++) {
+        const lx = (i / 8) * W + (gameTime * 40 * (i % 2 === 0 ? 1 : -1)) % 60;
+        const len = 20 + intensity * 30;
+        ctx.beginPath();
+        ctx.moveTo(lx % W, 0);
+        ctx.lineTo(lx % W, len);
+        ctx.stroke();
+      }
       ctx.restore();
-    } else {
-      // Coolant icon — green circle with snowflake-ish
-      ctx.beginPath();
-      ctx.arc(px, py, 8, 0, Math.PI * 2);
-      ctx.fillStyle = hsl(160, 80, 50, 0.9);
-      ctx.fill();
-      ctx.strokeStyle = hsl(160, 90, 75, 0.8);
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-      // Cross lines
-      ctx.beginPath();
-      ctx.moveTo(px, py - 5); ctx.lineTo(px, py + 5);
-      ctx.moveTo(px - 5, py); ctx.lineTo(px + 5, py);
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
     }
-    ctx.globalAlpha = 1;
   }
 }
 
-function drawPlayer() {
-  let px, py;
+// ── Draw: gates ───────────────────────────────────────────────
+function drawGates() {
+  for (const gate of gates) {
+    const isPulse = gate.isPulse;
+    const rects   = gapRects(gate);
+    const baseHue = isPulse ? 42 : 14;
+    const gateHue = heatWaveActive ? baseHue - 8 : baseHue;
 
-  if (hopping) {
-    const p = easeOutCubic(Math.min(1, hopT / HOP_DUR));
-    const fromPos = lanePos(hopFrom);
-    const toPos = lanePos(hopTo);
-    px = lerp(fromPos.x, toPos.x, p);
-    py = lerp(fromPos.y, toPos.y, p) - Math.sin(p * Math.PI) * 18;
-  } else {
-    const pos = lanePos(playerLane);
-    px = pos.x;
-    py = pos.y;
+    // Build wall segments: full row minus gaps
+    const sorted = [...rects].sort((a, b) => a.l - b.l);
+    let wx = 0;
+    const walls = [];
+    for (const r of sorted) {
+      if (r.l > wx) walls.push({ x1: wx, x2: r.l });
+      wx = r.r;
+    }
+    if (wx < W) walls.push({ x1: wx, x2: W });
+
+    // Draw walls
+    for (const w of walls) {
+      const wg = ctx.createLinearGradient(0, gate.y, 0, gate.y + GATE_THICK);
+      wg.addColorStop(0,   hsl(gateHue + 15, 95, isPulse ? 60 : 50));
+      wg.addColorStop(0.5, hsl(gateHue,      90, isPulse ? 66 : 56));
+      wg.addColorStop(1,   hsl(gateHue - 5,  85, isPulse ? 48 : 38));
+      ctx.fillStyle = wg;
+      ctx.fillRect(w.x1, gate.y, w.x2 - w.x1, GATE_THICK);
+      // top edge highlight
+      ctx.fillStyle = hsl(gateHue + 25, 80, 80, 0.45);
+      ctx.fillRect(w.x1, gate.y, w.x2 - w.x1, 2);
+    }
+
+    // Edge glows on gaps
+    for (const r of sorted) {
+      drawEdgeGlow(r.l, gate.y, gateHue);
+      drawEdgeGlow(r.r, gate.y, gateHue);
+    }
+
+    // Pulse telegraph shimmer inside gaps
+    if (isPulse) {
+      const pulse = 0.12 + 0.10 * Math.sin(pulsePhase * 4 + gate.pOff);
+      for (const r of sorted) {
+        ctx.fillStyle = hsl(52, 95, 70, pulse);
+        ctx.fillRect(r.l, gate.y - 3, r.r - r.l, GATE_THICK + 6);
+      }
+    }
   }
+}
 
-  // Coolant timer ring
-  if (coolantTimer > 0) {
+function drawEdgeGlow(ex, gy, hue) {
+  const gw  = 14;
+  const eg  = ctx.createLinearGradient(ex - gw, 0, ex + gw, 0);
+  eg.addColorStop(0,   hsl(hue, 95, 60, 0));
+  eg.addColorStop(0.5, hsl(hue + 12, 100, 72, 0.55));
+  eg.addColorStop(1,   hsl(hue, 95, 60, 0));
+  ctx.fillStyle = eg;
+  ctx.fillRect(ex - gw, gy - 4, gw * 2, GATE_THICK + 8);
+}
+
+// ── Draw: player trail (speed smear) ─────────────────────────
+function drawTrail() {
+  if (trail.length < 3) return;
+  for (let i = 1; i < trail.length; i++) {
+    const t0 = trail[i - 1], t1 = trail[i];
+    const a  = (i / trail.length) * 0.38;
+    const rw = PLAYER_R * 0.55 * (i / trail.length);
     ctx.beginPath();
-    ctx.arc(px, py, PLAYER_RADIUS + 6, -Math.PI / 2, -Math.PI / 2 + (coolantTimer / 2) * Math.PI * 2);
-    ctx.strokeStyle = hsl(160, 80, 60, 0.7);
-    ctx.lineWidth = 2.5;
+    ctx.moveTo(t0.x, t0.y);
+    ctx.lineTo(t1.x, t1.y);
+    ctx.strokeStyle = hsl(hueShift, 82, 62, a);
+    ctx.lineWidth   = rw;
+    ctx.lineCap     = 'round';
     ctx.stroke();
   }
+}
+
+// ── Draw: player ─────────────────────────────────────────────
+function drawPlayer() {
+  const px = playerX, py = H * PLAYER_Y_FRAC;
+
+  drawTrail();
 
   // Shield aura
-  if (playerShield) {
+  if (hasShield) {
+    const pulse = 0.35 + 0.15 * Math.sin(gameTime * 5.5);
+    ctx.beginPath(); ctx.arc(px, py, PLAYER_R + 7, 0, 6.28);
+    ctx.strokeStyle = hsl(200, 88, 72, pulse);
+    ctx.lineWidth   = 3; ctx.stroke();
+    ctx.fillStyle   = hsl(200, 70, 55, 0.08); ctx.fill();
+  }
+
+  // Body
+  const ph  = (hueShift + 20) % 360;
+  const pgr = ctx.createRadialGradient(px - 3, py - 3, 2, px, py, PLAYER_R);
+  pgr.addColorStop(0, hsl(ph, 70, 76));
+  pgr.addColorStop(1, hsl(ph, 85, 48));
+  ctx.beginPath(); ctx.arc(px, py, PLAYER_R, 0, 6.28);
+  ctx.fillStyle   = pgr; ctx.fill();
+  ctx.strokeStyle = hsl(ph, 62, 86, 0.65);
+  ctx.lineWidth   = 1.5; ctx.stroke();
+
+  // Glow
+  ctx.beginPath(); ctx.arc(px, py, PLAYER_R + 4, 0, 6.28);
+  ctx.fillStyle = hsl(ph, 90, 62, 0.10); ctx.fill();
+}
+
+// ── Draw: particles ───────────────────────────────────────────
+function drawPart() {
+  for (const p of particles) {
+    const a = Math.max(0, p.life / p.maxL);
     ctx.beginPath();
-    ctx.arc(px, py, PLAYER_RADIUS + 5, 0, Math.PI * 2);
-    ctx.strokeStyle = hsl(200, 80, 65, 0.4 + 0.2 * Math.sin(runTime * 5));
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.fillStyle = hsl(200, 60, 50, 0.1);
+    ctx.arc(p.x, p.y, Math.max(0.3, p.r * a), 0, 6.28);
+    ctx.fillStyle = hsl(p.hue, p.sat, p.lit, a * 0.9);
     ctx.fill();
   }
-
-  // Player body — HSL cycling
-  const playerHue = (runTime * 30 + 30) % 360;
-  ctx.beginPath();
-  ctx.arc(px, py, PLAYER_RADIUS, 0, Math.PI * 2);
-  const pgr = ctx.createRadialGradient(px - 3, py - 3, 2, px, py, PLAYER_RADIUS);
-  pgr.addColorStop(0, hsl(playerHue, 70, 70));
-  pgr.addColorStop(1, hsl(playerHue, 80, 45));
-  ctx.fillStyle = pgr;
-  ctx.fill();
-  ctx.strokeStyle = hsl(playerHue, 60, 80, 0.6);
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
-
-  // Eyes
-  ctx.fillStyle = '#fff';
-  ctx.beginPath();
-  ctx.arc(px - 4, py - 2, 3, 0, Math.PI * 2);
-  ctx.arc(px + 4, py - 2, 3, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#222';
-  ctx.beginPath();
-  ctx.arc(px - 3.5, py - 1.5, 1.5, 0, Math.PI * 2);
-  ctx.arc(px + 4.5, py - 1.5, 1.5, 0, Math.PI * 2);
-  ctx.fill();
 }
 
+// ── Draw: HUD ─────────────────────────────────────────────────
 function drawHUD() {
-  // Score
+  // Meters
   ctx.font = 'bold 22px system-ui,sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'top';
-  ctx.fillStyle = '#e0d0c0';
-  ctx.fillText(Math.floor(score).toString(), cx, 20);
-
-  // Multiplier
-  if (mult > 1) {
-    const mScale = 1 + 0.1 * Math.sin(runTime * 6);
-    ctx.save();
-    ctx.translate(cx + 50, 28);
-    ctx.scale(mScale, mScale);
-    ctx.font = 'bold 16px system-ui,sans-serif';
-    ctx.fillStyle = hsl(50, 90, 60);
-    ctx.fillText('x' + mult, 0, 0);
-    ctx.restore();
-  }
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.fillStyle = '#ecdccc';
+  ctx.fillText(Math.floor(meters) + 'm', W * 0.5, 15);
 
   // Streak
-  if (streak > 0) {
-    ctx.font = '12px system-ui,sans-serif';
-    ctx.fillStyle = hsl(50, 60, 50, 0.7);
-    ctx.fillText('streak ' + streak, cx, 48);
+  if (nmStreak > 0) {
+    ctx.font = 'bold 14px system-ui,sans-serif';
+    ctx.fillStyle = hsl(50, 92, 66);
+    ctx.fillText('x' + nmStreak + ' STREAK', W * 0.5, 43);
   }
 
-  // Heat wave indicator
-  if (heatWaveActive) {
-    const flash = 0.5 + 0.5 * Math.sin(runTime * 10);
-    ctx.font = 'bold 13px system-ui,sans-serif';
-    ctx.fillStyle = hsl(5, 90, 55, flash);
-    ctx.fillText('HEAT WAVE', cx, 65);
+  // HEAT bar
+  const bw = 92, bh = 7, bx = W * 0.5 - 46, by = 63;
+  ctx.fillStyle = 'rgba(15,8,4,0.55)';
+  ctx.fillRect(bx - 1, by - 1, bw + 2, bh + 2);
+  if (heatCount > 0) {
+    const frac = heatCount / HEAT_TO_SHIELD;
+    const hg = ctx.createLinearGradient(bx, 0, bx + bw, 0);
+    hg.addColorStop(0, hsl(22, 92, 52));
+    hg.addColorStop(1, hsl(50, 96, 68));
+    ctx.fillStyle = hg;
+    ctx.fillRect(bx, by, bw * frac, bh);
   }
+  ctx.font = '9px system-ui,sans-serif';
+  ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(195,145,95,0.58)';
+  ctx.fillText('HEAT', W * 0.5, by + bh + 3);
 
-  // Shield indicator
-  if (playerShield) {
-    ctx.font = '11px system-ui,sans-serif';
-    ctx.fillStyle = hsl(200, 70, 65, 0.8);
+  // Shield label
+  if (hasShield) {
+    ctx.font = 'bold 11px system-ui,sans-serif';
     ctx.textAlign = 'left';
-    ctx.fillText('SHIELD', 12, 20);
+    ctx.fillStyle = hsl(200, 82, 72, 0.85 + 0.15 * Math.sin(gameTime * 4.5));
+    ctx.fillText('COOL COAT', 10, 17);
   }
 
-  // Coolant indicator
-  if (coolantTimer > 0) {
-    ctx.font = '11px system-ui,sans-serif';
-    ctx.fillStyle = hsl(160, 70, 55, 0.8);
+  // Heat wave label
+  if (heatWaveActive) {
+    ctx.font = 'bold 12px system-ui,sans-serif';
     ctx.textAlign = 'right';
-    ctx.fillText('COOL ' + coolantTimer.toFixed(1) + 's', W - 12, 20);
+    ctx.fillStyle = hsl(5, 92, 62, 0.72 + 0.28 * Math.sin(gameTime * 9));
+    ctx.fillText('HEAT WAVE', W - 10, 17);
   }
 }
 
-function drawStartScreen() {
-  drawBackground();
-  drawLavaBubbles();
+// ── Draw: share button ────────────────────────────────────────
+function drawShareBtn() {
+  const bw = 118, bh = 38;
+  const bx = W * 0.5 - bw * 0.5, by = H * 0.80;
+  shareBox = { x: bx, y: by, w: bw, h: bh };
 
-  // Title
+  ctx.fillStyle = 'rgba(195,98,38,0.88)';
+  if (ctx.roundRect) {
+    ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 19); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,158,78,0.55)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 19); ctx.stroke();
+  } else {
+    ctx.fillRect(bx, by, bw, bh);
+  }
+  ctx.font = 'bold 14px system-ui,sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#fff';
+  ctx.fillText('Share Score', W * 0.5, by + bh * 0.5);
+}
+
+function doShare() {
+  const seed = (DAILY_SEED & 0xFFFF).toString(16);
+  const url  = `${GAME_URL}?challengeScore=${finalScore}&streak=${maxStreak}&seed=${seed}`;
+  const txt  = `I scored ${finalScore} in Magma Drift! (x${maxStreak} streak)\nCan you beat me? ${url}`;
+  if (navigator.share) {
+    navigator.share({ title: 'Magma Drift', text: txt, url }).catch(() => {});
+  } else {
+    navigator.clipboard.writeText(txt)
+      .then(() => { shareToast = 2; })
+      .catch(() => { shareToast = -1; });
+  }
+}
+
+// ── Draw: start screen ────────────────────────────────────────
+function drawStart() {
+  const t = performance.now() * 0.001;
+  drawBG();
+
   ctx.save();
-  const titleScale = 1 + 0.03 * Math.sin(performance.now() / 500);
-  ctx.translate(cx, H * 0.3);
-  ctx.scale(titleScale, titleScale);
-  ctx.font = 'bold 38px system-ui,sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-
-  // Title glow
-  ctx.shadowColor = hsl(20, 100, 50, 0.5);
-  ctx.shadowBlur = 20;
-  ctx.fillStyle = hsl(30, 90, 65);
-  ctx.fillText('MAGMA', 0, -22);
-  ctx.fillStyle = hsl(15, 85, 55);
-  ctx.fillText('DRIFT', 0, 22);
-  ctx.shadowBlur = 0;
-  ctx.restore();
-
-  // Subtitle
-  ctx.font = '14px system-ui,sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillStyle = hsl(25, 40, 50, 0.7);
-  ctx.fillText('Melt Lanes', cx, H * 0.3 + 52);
-
-  // Challenge
-  if (challengeScore > 0) {
-    ctx.font = 'bold 15px system-ui,sans-serif';
-    ctx.fillStyle = hsl(50, 80, 60);
-    ctx.fillText('Can you beat ' + challengeScore + '?', cx, H * 0.45);
-  }
-
-  // Best score
-  if (bestScore > 0) {
-    ctx.font = '13px system-ui,sans-serif';
-    ctx.fillStyle = hsl(30, 30, 50, 0.7);
-    ctx.fillText('Best: ' + bestScore, cx, H * 0.52);
-  }
-
-  // Tap prompt
-  const tapAlpha = 0.5 + 0.4 * Math.sin(performance.now() / 400);
-  ctx.font = '16px system-ui,sans-serif';
-  ctx.fillStyle = hsl(30, 50, 65, tapAlpha);
-  ctx.fillText('Tap to Start', cx, H * 0.65);
-
-  // Instructions
-  ctx.font = '11px system-ui,sans-serif';
-  ctx.fillStyle = hsl(20, 20, 45, 0.5);
-  ctx.fillText('Hop lanes \u2022 Avoid strikes \u2022 Don\'t melt', cx, H * 0.72);
-}
-
-function drawGameOver() {
-  // Dim overlay
-  ctx.fillStyle = 'rgba(10,5,3,0.65)';
-  ctx.fillRect(0, 0, W, H);
-
-  // Game Over
-  ctx.font = 'bold 32px system-ui,sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillStyle = hsl(10, 80, 60);
-  ctx.fillText('GAME OVER', cx, H * 0.3);
-
-  // Score
+  const sc = 1 + 0.028 * Math.sin(t * 1.6);
+  ctx.translate(W * 0.5, H * 0.27); ctx.scale(sc, sc);
+  ctx.shadowColor = hsl(20, 100, 52, 0.6); ctx.shadowBlur = 26;
   ctx.font = 'bold 44px system-ui,sans-serif';
-  ctx.fillStyle = hsl(35, 80, 65);
-  ctx.fillText(Math.floor(score).toString(), cx, H * 0.42);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = hsl(30, 92, 68); ctx.fillText('MAGMA', 0, -24);
+  ctx.fillStyle = hsl(14, 86, 55); ctx.fillText('DRIFT', 0, 24);
+  ctx.shadowBlur = 0; ctx.restore();
 
   ctx.font = '13px system-ui,sans-serif';
-  ctx.fillStyle = hsl(30, 30, 50, 0.7);
-  ctx.fillText('SCORE', cx, H * 0.36);
+  ctx.textAlign = 'center'; ctx.fillStyle = hsl(24, 40, 52, 0.72);
+  ctx.fillText('Switch-Skid', W * 0.5, H * 0.27 + 58);
 
-  // Best
-  ctx.font = '15px system-ui,sans-serif';
-  ctx.fillStyle = hsl(50, 60, 55);
-  ctx.fillText('Best: ' + bestScore, cx, H * 0.50);
-
-  // New best indicator
-  if (Math.floor(score) >= bestScore && bestScore > 0) {
-    ctx.font = 'bold 13px system-ui,sans-serif';
-    ctx.fillStyle = hsl(50, 90, 60);
-    ctx.fillText('NEW BEST!', cx, H * 0.55);
+  if (challengeScore > 0) {
+    ctx.font = 'bold 14px system-ui,sans-serif';
+    ctx.fillStyle = hsl(50, 82, 64);
+    ctx.fillText(`Beat: ${challengeScore}  (x${challengeStreak})`, W * 0.5, H * 0.45);
   }
 
-  // Tap retry
-  const tapAlpha = 0.5 + 0.4 * Math.sin(performance.now() / 400);
-  ctx.font = '15px system-ui,sans-serif';
-  ctx.fillStyle = hsl(30, 50, 60, tapAlpha);
-  ctx.fillText('Tap to Retry', cx, H * 0.68);
+  if (bestScore > 0) {
+    ctx.font = '13px system-ui,sans-serif';
+    ctx.fillStyle = hsl(30, 28, 52, 0.68);
+    ctx.fillText('Best: ' + bestScore, W * 0.5, H * 0.51);
+  }
+
+  const ta = 0.52 + 0.40 * Math.sin(t * 2.3);
+  ctx.font = '17px system-ui,sans-serif';
+  ctx.fillStyle = hsl(30, 55, 68, ta);
+  ctx.fillText('Tap to Start', W * 0.5, H * 0.66);
+
+  ctx.font = '11px system-ui,sans-serif';
+  ctx.fillStyle = hsl(20, 18, 46, 0.50);
+  ctx.fillText('Tap to flip arc  ·  Pass gaps  ·  Near-miss fills HEAT', W * 0.5, H * 0.73);
 }
 
-// --- Main Render ---
+// ── Draw: gameover screen ─────────────────────────────────────
+function drawGameOver() {
+  const t = performance.now() * 0.001;
+
+  ctx.fillStyle = 'rgba(7,3,2,0.74)';
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.font = 'bold 30px system-ui,sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = hsl(10, 80, 62);
+  ctx.fillText('GAME OVER', W * 0.5, H * 0.215);
+
+  ctx.font = 'bold 50px system-ui,sans-serif';
+  ctx.fillStyle = hsl(36, 86, 68);
+  ctx.fillText(finalScore.toString(), W * 0.5, H * 0.325);
+
+  ctx.font = '12px system-ui,sans-serif';
+  ctx.fillStyle = hsl(30, 24, 50, 0.68);
+  ctx.fillText('SCORE', W * 0.5, H * 0.38);
+
+  ctx.font = '15px system-ui,sans-serif';
+  ctx.fillStyle = hsl(50, 60, 58);
+  ctx.fillText('Best: ' + bestScore, W * 0.5, H * 0.425);
+
+  if (isNewBest) {
+    ctx.font = 'bold 14px system-ui,sans-serif';
+    ctx.fillStyle = hsl(52, 92, 64, 0.82 + 0.18 * Math.sin(t * 4.5));
+    ctx.fillText('NEW BEST!', W * 0.5, H * 0.468);
+  } else if (bestScore > 0) {
+    const diff = bestScore - finalScore;
+    ctx.font = '11px system-ui,sans-serif';
+    ctx.fillStyle = hsl(28, 22, 46, 0.55);
+    ctx.fillText('PB: ' + diff + ' away', W * 0.5, H * 0.468);
+  }
+
+  // Stats
+  ctx.font = '12px system-ui,sans-serif';
+  ctx.fillStyle = hsl(24, 34, 52, 0.74);
+  ctx.fillText(`${Math.floor(meters)}m · ${totalNM} near-miss · x${maxStreak} streak`, W * 0.5, H * 0.514);
+
+  ctx.font = '10px system-ui,sans-serif';
+  ctx.fillStyle = hsl(20, 18, 42, 0.50);
+  ctx.fillText(
+    `${Math.floor(meters)} + ${totalNM}×12 + ${maxStreak}×25`,
+    W * 0.5, H * 0.544
+  );
+
+  drawShareBtn();
+
+  if (shareToast > 0) {
+    ctx.font = 'bold 12px system-ui,sans-serif';
+    ctx.fillStyle = '#88ff88';
+    ctx.fillText('Copied to clipboard!', W * 0.5, H * 0.875);
+  }
+
+  const ta = 0.50 + 0.40 * Math.sin(t * 2.3);
+  ctx.font = '15px system-ui,sans-serif';
+  ctx.fillStyle = hsl(30, 50, 62, ta);
+  ctx.fillText('Tap to Retry', W * 0.5, H * 0.925);
+}
+
+// ── Render ────────────────────────────────────────────────────
 function render() {
   ctx.save();
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.clearRect(0, 0, W, H);
 
   if (state === 'start') {
-    drawStartScreen();
-  } else {
-    // Apply shake
-    ctx.save();
-    ctx.translate(shakeX, shakeY);
-
-    drawBackground();
-    drawLavaBubbles();
-    drawRing();
-    drawPads();
-    drawHazards();
-    drawPowerups();
-    drawPlayer();
-    drawParticles();
-    drawTextPops();
-    drawHUD();
-
-    ctx.restore();
-
-    if (state === 'gameover') {
-      drawGameOver();
-    }
+    drawStart();
+    ctx.restore(); return;
   }
+
+  // Apply crash zoom
+  if (crashZoom !== 1) {
+    ctx.translate(W * 0.5, H * 0.5);
+    ctx.scale(crashZoom, crashZoom);
+    ctx.translate(-W * 0.5, -H * 0.5);
+  }
+
+  // Apply shake
+  const sx = shakeAmt > 0 ? (Math.random() - 0.5) * shakeAmt * 6 : 0;
+  const sy = shakeAmt > 0 ? (Math.random() - 0.5) * shakeAmt * 6 : 0;
+  ctx.translate(sx, sy);
+
+  drawBG();
+  drawGates();
+  drawPlayer();
+  drawPart();
+  drawHUD();
 
   ctx.restore();
+
+  if (state === 'gameover') {
+    ctx.save();
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    drawGameOver();
+    ctx.restore();
+  }
 }
 
-// --- Game Loop ---
-let lastTime = 0;
-
-function gameLoop(timestamp) {
-  const dt = Math.min(0.05, (timestamp - lastTime) / 1000);
-  lastTime = timestamp;
-
-  if (state === 'start') {
-    // Animate background bubbles on start screen
-    updateLavaBubbles(dt);
-  }
-
+// ── Game loop ─────────────────────────────────────────────────
+let lastTS = 0;
+function loop(ts) {
+  const dt = Math.min(0.05, (ts - lastTS) / 1000);
+  lastTS = ts;
+  updateBubbles(dt);
   update(dt);
   render();
-  requestAnimationFrame(gameLoop);
+  requestAnimationFrame(loop);
 }
 
-// --- Input ---
+// ── Input ─────────────────────────────────────────────────────
 function handleInput(e) {
   if (e) e.preventDefault();
 
   if (state === 'start') {
-    state = 'playing';
-    initGame();
-    initLavaBubbles();
-  } else if (state === 'playing') {
-    hop();
-  } else if (state === 'gameover') {
-    // Check if clicking on buttons
-    if (e && e.target && (e.target.id === 'shareBtn' || e.target.id === 'copyBtn')) return;
+    initGame(); state = 'playing'; return;
+  }
+
+  if (state === 'playing') {
+    driftDir = -driftDir; return;
+  }
+
+  if (state === 'gameover') {
+    // Check share button hit
+    if (e && shareBox) {
+      const rect = CV.getBoundingClientRect();
+      const sx2 = W / rect.width, sy2 = H / rect.height;
+      let cx2, cy2;
+      if (e.touches && e.touches[0]) {
+        cx2 = (e.touches[0].clientX - rect.left) * sx2;
+        cy2 = (e.touches[0].clientY - rect.top) * sy2;
+      } else {
+        cx2 = ((e.clientX ?? 0) - rect.left) * sx2;
+        cy2 = ((e.clientY ?? 0) - rect.top) * sy2;
+      }
+      const b = shareBox;
+      if (cx2 >= b.x && cx2 <= b.x + b.w && cy2 >= b.y && cy2 <= b.y + b.h) {
+        doShare(); return;
+      }
+    }
     state = 'start';
-    btnsDiv.style.display = 'none';
   }
 }
 
-canvas.addEventListener('pointerdown', handleInput);
-document.addEventListener('keydown', (e) => {
-  if (e.code === 'Space' || e.code === 'Enter') {
-    e.preventDefault();
-    handleInput(null);
-  }
+CV.addEventListener('pointerdown', handleInput, { passive: false });
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); handleInput(null); }
 });
+document.addEventListener('touchstart', e => e.preventDefault(), { passive: false });
 
-// --- Share / Copy ---
-const GAME_URL = 'https://balinti.github.io/magma-drift/';
-
-shareBtn.addEventListener('pointerdown', (e) => {
-  e.stopPropagation();
-  const text = `I scored ${Math.floor(score)} in Magma Drift! Can you beat me?\n${GAME_URL}?challenge=${Math.floor(score)}`;
-  if (navigator.share) {
-    navigator.share({ title: 'Magma Drift', text, url: GAME_URL }).catch(() => {});
-  } else {
-    navigator.clipboard.writeText(text).then(() => {
-      addTextPop(cx, H * 0.6, 'Copied!', '#88ff88', 14);
-    }).catch(() => {});
-  }
-});
-
-copyBtn.addEventListener('pointerdown', (e) => {
-  e.stopPropagation();
-  const text = `I scored ${Math.floor(score)} in Magma Drift! Can you beat me?\n${GAME_URL}?challenge=${Math.floor(score)}`;
-  navigator.clipboard.writeText(text).then(() => {
-    addTextPop(cx, H * 0.6, 'Copied!', '#88ff88', 14);
-  }).catch(() => {});
-});
-
-// --- Challenge param ---
-function readChallenge() {
-  try {
-    const params = new URLSearchParams(window.location.search);
-    const c = parseInt(params.get('challenge'));
-    if (c > 0) challengeScore = c;
-  } catch (e) {}
-}
-readChallenge();
-
-// --- Start ---
-requestAnimationFrame(gameLoop);
+// ── Go ────────────────────────────────────────────────────────
+requestAnimationFrame(loop);
 
 })();
 </script>
